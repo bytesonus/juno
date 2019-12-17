@@ -1,0 +1,11 @@
+[package]
+name = "gotham"
+version = "0.0.1"
+authors = ["Rakshith Ravi <rakshith.ravi@gmx.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = "2"
+async-std = "1"

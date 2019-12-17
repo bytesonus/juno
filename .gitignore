@@ -107,3 +107,10 @@ fabric.properties
 
 # Android studio 3.1+ serialized cache file
 .idea/caches/build_file_checksums.ser
+
+#Added by cargo
+#
+#already existing elements are commented out
+
+/target
+**/*.rs.bk
