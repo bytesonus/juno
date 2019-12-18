@@ -6,13 +6,10 @@
 		"moduleId": "module-name",
 		"version": "1.0.0",
 		"dependencies": {
-			
+			"database-module": "npm-like-versioning? idk yet"
 		}
 	}
-	{"requestId": "123456789","type": "moduleRegistration","moduleId": "module-name","version": "1.0.0","dependencies": {}}
-
 	{
-		"success": true,
 		"requestId": "123456789",
 		"type": "moduleRegistered"
 	}
@@ -43,9 +40,27 @@
 		"hook": "module-name.hook_name"
 	}
 	{
-		"success": true,
-		"type": "registerHook",
-		"requestId": "123456789"
+		"requestId": "123456789",
+		"type": "hookRegistered"
+	}
+
+	Trigger hook:
+	{
+		"requestId": "123456789",
+		"type": "triggerHook",
+		"hook": "hook_name"
+	}
+	- To the module that's triggering the hook:
+	{
+		"requestId": "123456789",
+		"type": "hookTriggered",
+		"hook": "hook_name"
+	}
+	- To the module that's listening for the hook:
+	{
+		"requestId": "123456789",
+		"type": "hookTriggered",
+		"hook": "module-name.hook_name"
 	}
 
 	Declare function:
@@ -54,6 +69,10 @@
 		"type": "declareFunction",
 		"function": "function_name"
 	}
-	{"requestId": "123456789", "type": "declareFunction", "function": "functionName"}
+	{
+		"requestId": "123456789",
+		"type": "functionDeclared",
+		"function": "function_name"
+	}
 
  */
