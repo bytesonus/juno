@@ -2,20 +2,19 @@ extern crate async_std;
 extern crate clap;
 
 use clap::{crate_authors, crate_name, crate_version, App, Arg};
-use async_std::io::{BufReader, Error};
-use async_std::os::unix::net::{UnixListener, UnixStream};
+use std::io::{BufReader, BufRead, Error};
+use std::os::unix::net::{UnixListener, UnixStream};
 use async_std::path::Path;
 use async_std::task;
 use async_std::fs::remove_file;
-use std::time::Duration;
 
 mod constants;
 
 async fn handle_client(stream: UnixStream) {
-	// let stream = BufReader::new(stream);
-	// for line in stream.lines() {
-	// 	println!("{}", line.unwrap());
-	// }
+	let stream = BufReader::new(stream);
+	for line in stream.lines() {
+		println!("{}", line.unwrap());
+	}
 }
 
 fn main() {
@@ -65,11 +64,8 @@ fn main() {
 		.unwrap_or(constants::DEFAULT_SOCKET_LOCATION);
 
 	let socket_task = on_start(Path::new(socket_location));
-	let module_task = task::sleep(Duration::from_millis(2000));
 
-	// let combined_task = module_task.join(socket_task);
-
-	match task::block_on(socket_task, module_task) {
+	match task::block_on(socket_task) {
 		Ok(_) => (),
 		Err(err) => {
 			println!("Error creating socket: {}", err);
@@ -84,19 +80,21 @@ async fn on_start(socket_path: &Path) -> Result<(), Error> {
 		remove_file(socket_path).await?;
 	}
 
-	let socket_server = UnixListener::bind(socket_path).await?;
-	let mut incoming = socket_server.incoming();
+	// let socket_server = UnixListener::bind(socket_path).await?;
+	// let mut incoming = socket_server.incoming();
 
 	// while let Some(stream) = incoming.next().await {
 	// 	let mut stream = stream?;
 	// 	stream.write_all(b"hello world").await?;
 	// }
 
-	// for stream in socket_server.incoming() {
-	// 	let stream = stream?;
-	// 	task::spawn(async {
-	// 		handle_client(stream).await;
-	// 	});
-	// }
+	let socket_server = UnixListener::bind(socket_path)?;
+
+	for stream in socket_server.incoming() {
+		let stream = stream?;
+		task::spawn(async {
+			handle_client(stream).await;
+		});
+	}
 	Ok(())
 }
