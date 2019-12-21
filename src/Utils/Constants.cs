@@ -4,6 +4,9 @@ namespace Gotham.Utils
 {
 	public static class Constants
 	{
+		public const string DefaultUnixSocket = "../gotham.sock";
+		public const string DefaultModulesDirectory = "../modules/";
+
 		// Request keys
 		public const string Type = "type";
 		public const string RequestId = "requestId";
