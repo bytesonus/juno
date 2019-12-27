@@ -1,26 +1,21 @@
 extern crate async_std;
 extern crate clap;
+#[macro_use]
+extern crate lazy_static;
 
-use clap::{crate_authors, crate_name, crate_version, App, Arg};
-use std::io::{BufReader, BufRead, Error};
-use std::os::unix::net::{UnixListener, UnixStream};
+mod utils;
+mod service;
+mod models;
+
 use async_std::path::Path;
 use async_std::task;
-use async_std::fs::remove_file;
-
-mod constants;
-
-async fn handle_client(stream: UnixStream) {
-	let stream = BufReader::new(stream);
-	for line in stream.lines() {
-		println!("{}", line.unwrap());
-	}
-}
+use clap::{App, Arg};
+use utils::constants;
 
 fn main() {
-	let args = App::new(crate_name!())
-		.version(crate_version!())
-		.author(crate_authors!())
+	let args = App::new(constants::APP_NAME)
+		.version(constants::APP_VERSION)
+		.author(constants::APP_AUTHORS)
 		.about("Micro-services framework")
 		.arg(
 			Arg::with_name("socket-location")
@@ -55,7 +50,7 @@ fn main() {
 		.get_matches();
 
 	if args.is_present("version") {
-		println!("{}", crate_version!());
+		println!("{}", constants::APP_VERSION);
 		return;
 	}
 
@@ -63,38 +58,9 @@ fn main() {
 		.value_of("socket-location")
 		.unwrap_or(constants::DEFAULT_SOCKET_LOCATION);
 
-	let socket_task = on_start(Path::new(socket_location));
+	let socket_task = service::socket_server::listen(Path::new(socket_location));
 
-	match task::block_on(socket_task) {
-		Ok(_) => (),
-		Err(err) => {
-			println!("Error creating socket: {}", err);
-			return;
-		}
+	if let Err(err) = task::block_on(socket_task) {
+		println!("Error creating socket: {}", err);
 	}
-}
-
-async fn on_start(socket_path: &Path) -> Result<(), Error> {
-
-	if socket_path.exists().await {
-		remove_file(socket_path).await?;
-	}
-
-	// let socket_server = UnixListener::bind(socket_path).await?;
-	// let mut incoming = socket_server.incoming();
-
-	// while let Some(stream) = incoming.next().await {
-	// 	let mut stream = stream?;
-	// 	stream.write_all(b"hello world").await?;
-	// }
-
-	let socket_server = UnixListener::bind(socket_path)?;
-
-	for stream in socket_server.incoming() {
-		let stream = stream?;
-		task::spawn(async {
-			handle_client(stream).await;
-		});
-	}
-	Ok(())
 }
