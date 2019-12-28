@@ -1,7 +1,6 @@
 use crate::models::Module;
-use std::collections::HashMap;
 use serde_json::Value;
-use serde_json::Error;
+use std::collections::HashMap;
 
 lazy_static! {
 	static ref REGISTERED_MODULES: HashMap<String, Module> = HashMap::new();
@@ -9,14 +8,16 @@ lazy_static! {
 	static ref REQUEST_ORIGINS: HashMap<String, String> = HashMap::new();
 }
 
-pub fn handle_request(module: &Module, data: &String) {
-	let json_result: Result<Value, Error> = serde_json::from_str(data);
+pub async fn handle_request(module: &Module, data: String) {
+	let json_result = serde_json::from_str(&data);
 
 	if let Err(_) = json_result {
 		return;
 	}
 
-	let input = json_result.unwrap();
+	let input: Value = json_result.unwrap();
+
+	module.send(data).await;
 
 	println!("{}", input["requestId"].as_str().unwrap());
 }
@@ -265,7 +266,7 @@ private static void RecalculateAllModulesDependencies()
 		var module = UnRegisteredModules[moduleId];
 		RegisteredModules.Add(module.ModuleID, module);
 		UnRegisteredModules.Remove(moduleId);
-		
+
 		Send(
 			module,
 			new JObject

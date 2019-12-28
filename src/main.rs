@@ -3,13 +3,14 @@ extern crate clap;
 #[macro_use]
 extern crate lazy_static;
 
-mod utils;
-mod service;
 mod models;
+mod service;
+mod utils;
 
 use async_std::path::Path;
 use async_std::task;
 use clap::{App, Arg};
+use service::socket_server;
 use utils::constants;
 
 fn main() {
@@ -58,7 +59,7 @@ fn main() {
 		.value_of("socket-location")
 		.unwrap_or(constants::DEFAULT_SOCKET_LOCATION);
 
-	let socket_task = service::socket_server::listen(Path::new(socket_location));
+	let socket_task = socket_server::listen(Path::new(socket_location));
 
 	if let Err(err) = task::block_on(socket_task) {
 		println!("Error creating socket: {}", err);

@@ -1,4 +1,4 @@
-use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
+use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::sink::SinkExt;
 
 use async_std::io::BufReader;
@@ -20,14 +20,12 @@ pub struct Module {
 	registered_hooks: Vec<String>,
 
 	socket: UnixStream,
-	socket_sender: UnboundedSender<String>,
-	socket_receiver: UnboundedReceiver<String>,
+	socket_sender: Option<UnboundedSender<String>>,
 }
 
 #[allow(dead_code)]
 impl Module {
 	pub fn new(socket: UnixStream) -> Self {
-		let (sender, receiver) = unbounded::<String>();
 		Module {
 			registered: false,
 			module_id: String::new(),
@@ -36,8 +34,7 @@ impl Module {
 			declared_functions: vec![],
 			registered_hooks: vec![],
 			socket,
-			socket_sender: sender,
-			socket_receiver: receiver,
+			socket_sender: None,
 		}
 	}
 
@@ -89,8 +86,29 @@ impl Module {
 		self.registered_hooks.contains(hook_name)
 	}
 
-	pub fn send(&mut self, data: String) {
-		self.socket_sender.send(data);
+	pub fn set_sender(&mut self, sender: UnboundedSender<String>) {
+		self.socket_sender = Some(sender);
+	}
+
+	pub async fn send(&self, data: String) {
+		if let Some(sender) = &self.socket_sender {
+			let mut sender = sender;
+			let result = sender.send(data).await;
+			if let Err(error) = result {
+				println!("Error queing data to module: {}", error);
+			}
+		}
+	}
+
+	pub async fn close_sender(&self) {
+		if let Some(sender) = &self.socket_sender {
+			let mut sender = sender;
+			let result = sender.close().await;
+			if let Err(error) = result {
+				println!("Error closing module's sending queue: {}", error);
+				return;
+			}
+		}
 	}
 
 	pub async fn read_data_loop(&self) {
@@ -99,16 +117,17 @@ impl Module {
 
 		while let Some(line) = lines.next().await {
 			if let Ok(line) = line {
-				data_handler::handle_request(&self, &line);
+				data_handler::handle_request(&self, line).await;
 			}
 		}
+
+		self.close_sender().await;
 	}
 
-	pub async fn write_data_loop(&self) {
+	pub async fn write_data_loop(&self, receiver: &mut UnboundedReceiver<String>) {
 		let mut socket = &self.socket;
-		let mut rec = &self.socket_receiver;
 
-		while let Some(data) = rec.next().await {
+		while let Some(data) = receiver.next().await {
 			if let Err(err) = socket.write_all(data.as_bytes()).await {
 				println!("Error while writing to socket: {}", err);
 			}
