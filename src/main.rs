@@ -2,6 +2,7 @@ extern crate async_std;
 extern crate clap;
 #[macro_use]
 extern crate lazy_static;
+extern crate rand;
 
 mod models;
 mod service;

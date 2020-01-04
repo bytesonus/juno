@@ -1,17 +1,12 @@
-use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use futures_util::sink::SinkExt;
-
-use async_std::io::BufReader;
-use async_std::os::unix::net::UnixStream;
-use async_std::prelude::StreamExt;
-use async_std::prelude::*;
 use std::collections::HashMap;
 
-use crate::service::data_handler;
+use futures::channel::mpsc::UnboundedSender;
+use futures_util::sink::SinkExt;
 
 #[allow(dead_code)]
 pub struct Module {
 	registered: bool,
+	module_uuid: u128,
 	module_id: String,
 	version: String,
 	dependencies: HashMap<String, String>,
@@ -19,22 +14,27 @@ pub struct Module {
 	// These are the (global) hooks that this particular module is listening for
 	registered_hooks: Vec<String>,
 
-	socket: UnixStream,
-	socket_sender: Option<UnboundedSender<String>>,
+	module_sender: UnboundedSender<String>,
 }
 
 #[allow(dead_code)]
 impl Module {
-	pub fn new(socket: UnixStream) -> Self {
+	pub fn new(
+		module_uuid: u128,
+		module_id: String,
+		version: String,
+		module_sender: UnboundedSender<String>,
+	) -> Self {
 		Module {
 			registered: false,
-			module_id: String::new(),
-			version: String::new(),
+			module_uuid,
+			module_id,
+			version,
 			dependencies: HashMap::new(),
 			declared_functions: vec![],
 			registered_hooks: vec![],
-			socket,
-			socket_sender: None,
+
+			module_sender,
 		}
 	}
 
@@ -86,51 +86,11 @@ impl Module {
 		self.registered_hooks.contains(hook_name)
 	}
 
-	pub fn set_sender(&mut self, sender: UnboundedSender<String>) {
-		self.socket_sender = Some(sender);
-	}
-
 	pub async fn send(&self, data: String) {
-		if let Some(sender) = &self.socket_sender {
-			let mut sender = sender;
-			let result = sender.send(data).await;
-			if let Err(error) = result {
-				println!("Error queing data to module: {}", error);
-			}
-		}
-	}
-
-	pub async fn close_sender(&self) {
-		if let Some(sender) = &self.socket_sender {
-			let mut sender = sender;
-			let result = sender.close().await;
-			if let Err(error) = result {
-				println!("Error closing module's sending queue: {}", error);
-				return;
-			}
-		}
-	}
-
-	pub async fn read_data_loop(&self) {
-		let reader = BufReader::new(&self.socket);
-		let mut lines = reader.lines();
-
-		while let Some(line) = lines.next().await {
-			if let Ok(line) = line {
-				data_handler::handle_request(&self, line).await;
-			}
-		}
-
-		self.close_sender().await;
-	}
-
-	pub async fn write_data_loop(&self, receiver: &mut UnboundedReceiver<String>) {
-		let mut socket = &self.socket;
-
-		while let Some(data) = receiver.next().await {
-			if let Err(err) = socket.write_all(data.as_bytes()).await {
-				println!("Error while writing to socket: {}", err);
-			}
+		let mut sender = &self.module_sender;
+		let result = sender.send(data).await;
+		if let Err(error) = result {
+			println!("Error queing data to module: {}", error);
 		}
 	}
 }

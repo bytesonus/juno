@@ -1,14 +1,20 @@
 use crate::models::Module;
-use serde_json::Value;
+use crate::models::ModuleComm;
+use crate::utils::constants::request_keys;
+
 use std::collections::HashMap;
 
+use async_std::sync::Mutex;
+
+use serde_json::{json, to_string, to_string_pretty, Value};
+
 lazy_static! {
-	static ref REGISTERED_MODULES: HashMap<String, Module> = HashMap::new();
-	static ref UNREGISTERED_MODULES: HashMap<String, Module> = HashMap::new();
-	static ref REQUEST_ORIGINS: HashMap<String, String> = HashMap::new();
+	static ref REGISTERED_MODULES: Mutex<HashMap<String, Module>> = Mutex::new(HashMap::new());
+	static ref UNREGISTERED_MODULES: Mutex<HashMap<String, Module>> = Mutex::new(HashMap::new());
+	static ref REQUEST_ORIGINS: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
 }
 
-pub async fn handle_request(module: &Module, data: String) {
+pub async fn handle_request(module_comm: &ModuleComm, data: String) {
 	let json_result = serde_json::from_str(&data);
 
 	if let Err(_) = json_result {
@@ -17,9 +23,71 @@ pub async fn handle_request(module: &Module, data: String) {
 
 	let input: Value = json_result.unwrap();
 
-	module.send(data).await;
+	let r#type = input[request_keys::TYPE].as_str();
+	let request_id = input[request_keys::REQUEST_ID].as_str();
+	if r#type == None {
+		// SendError(unknownRequest);
+		return;
+	}
+	let r#type = r#type.unwrap();
+	if request_id == None {
+		// SendError(invalidRequestId);
+		return;
+	}
+	let request_id = request_id.unwrap();
 
-	println!("{}", input["requestId"].as_str().unwrap());
+	match r#type {
+		"moduleRegistration" => {
+			handle_module_registration(module_comm, request_id, &input).await;
+		}
+		_ => {
+			// SendError(unknownRequest);
+		}
+	}
+}
+
+async fn handle_module_registration(module_comm: &ModuleComm, request_id: &str, request: &Value) {
+	let module_id = request[request_keys::MODULE_ID].as_str();
+	let version = request[request_keys::VERSION].as_str();
+
+	if module_id == None {
+		// SendError(malformedRequest);
+		return;
+	}
+	let module_id = module_id.unwrap();
+
+	if version == None {
+		// SendError(malformedRequest);
+		return;
+	}
+	let version = version.unwrap();
+
+	let registered_modules = REGISTERED_MODULES.lock().await;
+	let mut unregistered_modules = UNREGISTERED_MODULES.lock().await;
+
+	if registered_modules.contains_key(module_id) || unregistered_modules.contains_key(module_id) {
+		// SendError(invalidModuleId)
+		return;
+	}
+
+	let module = Module::new(
+		module_comm.get_uuid(),
+		String::from(module_id),
+		String::from(version),
+		module_comm.clone_sender(),
+	);
+
+	unregistered_modules.insert(String::from(module_id), module);
+
+	module_comm
+		.send(format!(
+			"{}",
+			json!({
+				request_keys::REQUEST_ID: request_id,
+				request_keys::TYPE: "moduleRegistered"
+			})
+		))
+		.await;
 }
 
 /*

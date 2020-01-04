@@ -1,12 +1,17 @@
 use crate::models::Module;
+use crate::models::ModuleComm;
+
 use async_std::fs::remove_file;
 use async_std::io::Result;
 use async_std::os::unix::net::{UnixListener, UnixStream};
 use async_std::path::Path;
 use async_std::prelude::StreamExt;
 use async_std::task;
+
 use futures::channel::mpsc::unbounded;
 use futures::future;
+
+use rand::{thread_rng, Rng};
 
 pub async fn listen(socket_path: &Path) -> Result<()> {
 	// TODO Try to aquire a lock on the lock file first.
@@ -38,11 +43,11 @@ async fn handle_client(stream: Result<UnixStream>) {
 	let stream = stream.unwrap();
 	let (sender, mut receiver) = unbounded::<String>();
 
-	let mut module = Module::new(stream);
-	module.set_sender(sender);
+	let uuid: u128 = thread_rng().gen();
+	let module_comm = ModuleComm::new(uuid, stream, sender);
 
-	let read_future = module.read_data_loop();
-	let write_future = module.write_data_loop(&mut receiver);
+	let read_future = module_comm.read_data_loop();
+	let write_future = module_comm.write_data_loop(&mut receiver);
 
 	future::join(read_future, write_future).await;
 

@@ -10,6 +10,15 @@ pub const DEFAULT_SOCKET_LOCATION: &str = "../gotham.sock";
 pub const DEFAULT_MODULES_LOCATION: &str = "../modules/";
 
 #[allow(dead_code)]
+pub mod request_keys {
+	pub const TYPE: &str = "type";
+	pub const REQUEST_ID: &str = "requestId";
+	pub const MODULE_ID: &str = "moduleId";
+	pub const VERSION: &str = "version";
+	pub const DEPENDENCIES: &str = "dependencies";
+}
+
+#[allow(dead_code)]
 pub mod request_types {
 	pub const ERROR: u32 = 0;
 
