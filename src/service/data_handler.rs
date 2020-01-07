@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use async_std::sync::Mutex;
 
-use serde_json::{json, to_string, to_string_pretty, Value};
+use serde_json::{json, Value};
 
 lazy_static! {
 	static ref REGISTERED_MODULES: Mutex<HashMap<String, Module>> = Mutex::new(HashMap::new());
@@ -80,13 +80,13 @@ async fn handle_module_registration(module_comm: &ModuleComm, request_id: &str, 
 	unregistered_modules.insert(String::from(module_id), module);
 
 	module_comm
-		.send(format!(
-			"{}",
+		.send(
 			json!({
 				request_keys::REQUEST_ID: request_id,
 				request_keys::TYPE: "moduleRegistered"
 			})
-		))
+			.to_string(),
+		)
 		.await;
 }
 

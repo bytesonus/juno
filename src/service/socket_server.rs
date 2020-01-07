@@ -1,4 +1,3 @@
-use crate::models::Module;
 use crate::models::ModuleComm;
 
 use async_std::fs::remove_file;
