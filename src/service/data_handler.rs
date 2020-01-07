@@ -1,17 +1,23 @@
+use crate::models::module;
 use crate::models::Module;
 use crate::models::ModuleComm;
+use crate::utils::constants::errors;
+use crate::utils::constants::gotham_hooks;
 use crate::utils::constants::request_keys;
+use crate::utils::constants::request_types;
 
 use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_std::sync::Mutex;
 
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 
 lazy_static! {
 	static ref REGISTERED_MODULES: Mutex<HashMap<String, Module>> = Mutex::new(HashMap::new());
 	static ref UNREGISTERED_MODULES: Mutex<HashMap<String, Module>> = Mutex::new(HashMap::new());
 	static ref REQUEST_ORIGINS: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
+	static ref MODULE_UUID_TO_ID: Mutex<HashMap<u128, String>> = Mutex::new(HashMap::new());
 }
 
 pub async fn handle_request(module_comm: &ModuleComm, data: String) {
@@ -23,528 +29,373 @@ pub async fn handle_request(module_comm: &ModuleComm, data: String) {
 
 	let input: Value = json_result.unwrap();
 
-	let r#type = input[request_keys::TYPE].as_str();
+	let r#type = input[request_keys::TYPE].as_u64();
 	let request_id = input[request_keys::REQUEST_ID].as_str();
 	if r#type == None {
-		// SendError(unknownRequest);
+		send_error(module_comm, "undefined", errors::UNKNOWN_REQUEST).await;
 		return;
 	}
 	let r#type = r#type.unwrap();
 	if request_id == None {
-		// SendError(invalidRequestId);
+		send_error(module_comm, "undefined", errors::INVALID_REQUEST_ID).await;
 		return;
 	}
 	let request_id = request_id.unwrap();
 
 	match r#type {
-		"moduleRegistration" => {
+		request_types::MODULE_REGISTRATION => {
 			handle_module_registration(module_comm, request_id, &input).await;
 		}
-		_ => {
-			// SendError(unknownRequest);
+		request_types::FUNCTION_CALL => {
+			handle_function_call(module_comm, request_id, &input).await;
 		}
+		_ => {
+			send_error(module_comm, request_id, errors::UNKNOWN_REQUEST).await;
+		}
+	}
+}
+
+pub async fn on_module_disconnected(_module_comm: &ModuleComm) {
+	// TODO recheck dependencies, hooks, registered modules, unregistered modules.
+	/*
+	let module_id = get_module_id_for_uuid(&module_comm.get_uuid()).await;
+
+	if let None = module_id {
+		return;
+	}
+	let module_id = module_id.unwrap();
+
+	let mut registered_modules = REGISTERED_MODULES.lock().await;
+	let mut unregistered_modules = UNREGISTERED_MODULES.lock().await;
+
+	if registered_modules.contains_key(&module_id) {
+		registered_modules
+			.remove(&module_id)
+			.unwrap()
+			.close_sender()
+			.await;
+			println!("Removed");
+	} else if unregistered_modules.contains_key(&module_id) {
+		unregistered_modules
+			.remove(&module_id)
+			.unwrap()
+			.close_sender()
+			.await;
+			println!("Removed");
+	}
+	*/
+}
+
+pub async fn is_uuid_exists(uuid: &u128) -> bool {
+	MODULE_UUID_TO_ID.lock().await.contains_key(uuid)
+}
+
+#[allow(dead_code)]
+async fn trigger_hook(module: &Module, hook: &str, sticky: bool, force: bool) {
+	// module is trying to trigger a hook.
+	// if force is true, all modules get the hook, regardless of whether they want it or not
+	let module_id = module.get_module_id();
+	let hook_name = module_id.clone() + "." + hook;
+
+	for registered_module in REGISTERED_MODULES.lock().await.values() {
+		if force || registered_module.is_hook_registered(&hook_name) {
+			registered_module
+				.send(
+					json!({
+						request_keys::REQUEST_ID: generate_request_id().await,
+						request_keys::TYPE: request_types::HOOK_TRIGGERED,
+						request_keys::HOOK: hook_name
+					})
+					.to_string(),
+				)
+				.await;
+		}
+	}
+
+	if sticky {
+		// TODO sticky this hook somewhere so that new modules can get it
+	}
+}
+
+async fn trigger_hook_on(from_module: &Module, to_module_id: &String, hook: &str, force: bool) {
+	// from_module is trying to trigger a hook on to_module.
+	// if force is true, all modules get the hook, regardless of whether they want it or not
+	let module_id = from_module.get_module_id();
+	let hook_name = module_id.clone() + "." + hook;
+	let registered_modules = REGISTERED_MODULES.lock().await;
+	let to_module = registered_modules.get(to_module_id);
+
+	if let None = to_module {
+		return;
+	}
+
+	let to_module = to_module.unwrap();
+
+	if force || to_module.is_hook_registered(&hook_name) {
+		to_module
+			.send(
+				json!({
+					request_keys::REQUEST_ID: generate_request_id().await,
+					request_keys::TYPE: request_types::HOOK_TRIGGERED,
+					request_keys::HOOK: hook_name
+				})
+				.to_string(),
+			)
+			.await;
 	}
 }
 
 async fn handle_module_registration(module_comm: &ModuleComm, request_id: &str, request: &Value) {
 	let module_id = request[request_keys::MODULE_ID].as_str();
 	let version = request[request_keys::VERSION].as_str();
+	let dependencies = request[request_keys::DEPENDENCIES].as_object();
 
 	if module_id == None {
-		// SendError(malformedRequest);
+		send_error(module_comm, request_id, errors::MALFORMED_REQUEST).await;
 		return;
 	}
 	let module_id = module_id.unwrap();
 
 	if version == None {
-		// SendError(malformedRequest);
+		send_error(module_comm, request_id, errors::MALFORMED_REQUEST).await;
 		return;
 	}
 	let version = version.unwrap();
 
-	let registered_modules = REGISTERED_MODULES.lock().await;
-	let mut unregistered_modules = UNREGISTERED_MODULES.lock().await;
+	let mut dependency_map = HashMap::new();
 
-	if registered_modules.contains_key(module_id) || unregistered_modules.contains_key(module_id) {
-		// SendError(invalidModuleId)
-		return;
+	// If dependencies are not null, then populate the dependency_map
+	if let Some(dependencies) = dependencies {
+		for dependency in dependencies.keys() {
+			if !dependencies[dependency].is_string() {
+				send_error(module_comm, request_id, errors::MALFORMED_REQUEST).await;
+				return;
+			}
+			dependency_map.insert(
+				dependency.clone(),
+				String::from(dependencies[dependency].as_str().unwrap()),
+			);
+		}
 	}
 
-	let module = Module::new(
-		module_comm.get_uuid(),
+	let mut module = Module::new(
+		module_comm.get_uuid().clone(),
 		String::from(module_id),
 		String::from(version),
 		module_comm.clone_sender(),
 	);
+	module.set_dependencies(dependency_map);
 
-	unregistered_modules.insert(String::from(module_id), module);
+	let mut registered_modules = REGISTERED_MODULES.lock().await;
+	let mut unregistered_modules = UNREGISTERED_MODULES.lock().await;
 
+	if registered_modules.contains_key(module_id) || unregistered_modules.contains_key(module_id) {
+		send_error(module_comm, request_id, errors::DUPLICATE_MODULE).await;
+		return;
+	}
+
+	// Register that this uuid belongs to this moduleId
+	MODULE_UUID_TO_ID
+		.lock()
+		.await
+		.insert(module_comm.get_uuid().clone(), String::from(module_id));
+
+	module
+		.send(
+			json!({
+				request_keys::REQUEST_ID: generate_request_id().await,
+				request_keys::TYPE: request_types::MODULE_REGISTERED
+			})
+			.to_string(),
+		)
+		.await;
+
+	if module.get_dependencies().len() == 0 {
+		module.set_registered(true);
+
+		registered_modules.insert(String::from(module_id), module);
+		drop(registered_modules);
+		drop(unregistered_modules);
+
+		trigger_hook_on(
+			&module::GOTHAM_MODULE,
+			&String::from(module_id),
+			gotham_hooks::ACTIVATED,
+			true,
+		)
+		.await;
+	} else {
+		module.set_registered(false);
+
+		unregistered_modules.insert(String::from(module_id), module);
+		drop(registered_modules);
+		drop(unregistered_modules);
+	}
+
+	recalculate_all_module_dependencies().await;
+}
+
+async fn recalculate_all_module_dependencies() {
+	// List of all modules whose dependencies weren't satisfied earlier but are satisfied now
+	let mut satisfied_modules: Vec<String> = vec![];
+
+	let mut registered_modules = REGISTERED_MODULES.lock().await;
+	let mut unregistered_modules = UNREGISTERED_MODULES.lock().await;
+
+	// recheck the dependencies for each unregistered module
+	for (module_id, module) in unregistered_modules.iter() {
+		// For each module, check if the dependencies are satisfied
+		let mut dependency_satisfied = true;
+
+		for (dependency, _) in module.get_dependencies() {
+			// TODO check version as well
+			if !registered_modules.contains_key(dependency)
+				&& !unregistered_modules.contains_key(dependency)
+			{
+				dependency_satisfied = false;
+				break;
+			}
+		}
+
+		if dependency_satisfied {
+			satisfied_modules.push(module_id.clone());
+		}
+	}
+
+	// For all modules whose dependencies are now satisfied, register them
+	for module_id in satisfied_modules {
+		let module = unregistered_modules.remove(&module_id).unwrap();
+
+		trigger_hook_on(
+			&module::GOTHAM_MODULE,
+			&module_id,
+			gotham_hooks::ACTIVATED,
+			true,
+		)
+		.await;
+		registered_modules.insert(module_id, module);
+	}
+}
+
+async fn handle_function_call(module_comm: &ModuleComm, request_id: &str, request: &Value) {
+	let module_id = get_module_id_for_uuid(&module_comm.get_uuid()).await;
+
+	if let None = module_id {
+		send_error(module_comm, request_id, errors::UNKNOWN_REQUEST).await;
+		return;
+	}
+	let module_id = module_id.unwrap();
+
+	// Check if module is registered
+	if !REGISTERED_MODULES.lock().await.contains_key(&module_id) {
+		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
+		return;
+	}
+
+	let function = request[request_keys::FUNCTION].as_str();
+
+	if function == None {
+		send_error(module_comm, request_id, errors::MALFORMED_REQUEST).await;
+		return;
+	}
+	let function = function.unwrap();
+	let function_name = is_function_name(function);
+
+	if let None = function_name {
+		send_error(module_comm, request_id, errors::UNKNOWN_FUNCTION).await;
+		return;
+	}
+	let (module_name, function_name) = function_name.unwrap();
+
+	let registered_modules = REGISTERED_MODULES.lock().await;
+	if !registered_modules.contains_key(&module_name) {
+		send_error(module_comm, request_id, errors::UNKNOWN_MODULE).await;
+		return;
+	}
+
+	let receiver_module = registered_modules.get(&module_name).unwrap();
+	if !receiver_module.is_function_declared(&function_name) {
+		send_error(module_comm, request_id, errors::UNKNOWN_FUNCTION).await;
+		return;
+	}
+
+	let mut request_origins = REQUEST_ORIGINS.lock().await;
+	let request_id_heap = String::from(request_id);
+	if request_origins.contains_key(&request_id_heap) {
+		if request_origins[&request_id_heap] != module_id {
+			// There's already a requestId that's supposed to return to
+			// a different module. Let the module know that it's invalid
+			// so that we can prevent response-hijacking.
+			send_error(module_comm, request_id, errors::INVALID_REQUEST_ID).await;
+			return;
+		}
+	} else {
+		request_origins.insert(request_id_heap, module_id);
+	}
+	drop(request_origins);
+
+	let mut response = request.clone();
+	if request[request_keys::ARGUMENTS].as_object() == None {
+		response[request_keys::ARGUMENTS] = Value::Object(Map::new());
+	}
+
+	response[request_keys::FUNCTION] = Value::String(function_name);
+
+	receiver_module.send(response.to_string()).await;
+}
+
+fn is_function_name(name: &str) -> Option<(String, String)> {
+	if !name.contains(".") {
+		return None;
+	}
+
+	let parts: Vec<&str> = name.split(".").collect();
+
+	if parts.len() != 2 {
+		return None;
+	}
+
+	for letter in parts[0].chars() {
+		if !letter.is_alphanumeric() && letter != '-' && letter != '_' {
+			return None;
+		}
+	}
+
+	for letter in parts[1].chars() {
+		if !letter.is_alphanumeric() && letter != '_' {
+			return None;
+		}
+	}
+
+	Some((String::from(parts[0]), String::from(parts[1])))
+}
+
+async fn get_module_id_for_uuid(module_uuid: &u128) -> Option<String> {
+	let module_uuid_to_id = MODULE_UUID_TO_ID.lock().await;
+	let module_id = module_uuid_to_id.get(module_uuid)?;
+	Some(module_id.clone())
+}
+
+async fn generate_request_id() -> String {
+	String::from(format!("gotham{}", get_current_millis()))
+}
+
+fn get_current_millis() -> u128 {
+	SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.expect("Time went backwards. Wtf?")
+		.as_nanos()
+}
+
+async fn send_error(module_comm: &ModuleComm, request_id: &str, error_code: u32) {
 	module_comm
 		.send(
 			json!({
 				request_keys::REQUEST_ID: request_id,
-				request_keys::TYPE: "moduleRegistered"
+				request_keys::TYPE: request_types::ERROR,
+				request_keys::ERROR: error_code
 			})
 			.to_string(),
 		)
 		.await;
 }
-
-/*
-internal static Dictionary<string, Module> UnRegisteredModules = new Dictionary<string, Module>();
-internal static Dictionary<string, string> RequestOrigins = new Dictionary<string, string>();
-private static Dictionary<string, ModuleRequestHandler> RequestHandlers = new Dictionary<string, ModuleRequestHandler>
-{
-	{
-		Constants.ModuleRegistration,
-		new ModuleRequestHandler(HandleModuleRegistration)
-		{
-			ParametersRequired =
-			{
-				new ModuleRequestParameter(Constants.ModuleId),
-				new ModuleRequestParameter(Constants.Version),
-				new ModuleRequestParameter(Constants.Dependencies)
-				{
-					ParameterType = JTokenType.Object,
-					Optional = true
-				}
-			}
-		}
-	},
-	{
-		Constants.FunctionCall,
-		new ModuleRequestHandler(HandleFunctionCall)
-		{
-			ParametersRequired =
-			{
-				new ModuleRequestParameter(Constants.Function),
-				new ModuleRequestParameter(Constants.Arguments)
-				{
-					ParameterType = JTokenType.Object,
-					Optional = true
-				}
-			}
-		}
-	},
-	{
-		Constants.FunctionResponse,
-		new ModuleRequestHandler(HandleFunctionResponse)
-		{
-			ParametersRequired =
-			{
-				new ModuleRequestParameter(Constants.RequestId),
-				new ModuleRequestParameter(Constants.Data)
-				{
-					ParameterType = JTokenType.Object,
-					Optional = false
-				}
-			}
-		}
-	},
-	{
-		Constants.RegisterHook,
-		new ModuleRequestHandler(HandleRegisterHook)
-		{
-			ParametersRequired =
-			{
-				new ModuleRequestParameter(Constants.Hook)
-			}
-		}
-	},
-	{
-		Constants.TriggerHook,
-		new ModuleRequestHandler(HandleTriggerHook)
-		{
-			ParametersRequired =
-			{
-				new ModuleRequestParameter(Constants.Hook),
-				new ModuleRequestParameter(Constants.Data)
-				{
-					Optional = true,
-					ParameterType = JTokenType.Object
-				}
-			}
-		}
-	},
-	{
-		Constants.DeclareFunction,
-		new ModuleRequestHandler(HandleDeclareFunction)
-		{
-			ParametersRequired =
-			{
-				new ModuleRequestParameter(Constants.Function)
-			}
-		}
-	}
-};
-
-internal static void HandleRequest(Module module, string data)
-{
-	try
-	{
-		if (data == null)
-			return;
-
-		var request = JObject.Parse(data);
-
-		var type = request[Constants.Type]?.ToObject<string>();
-		var requestId = request[Constants.RequestId]?.ToObject<string>();
-
-		if (type == null)
-		{
-			SendError(module, Constants.Errors.UnknownRequest);
-			return;
-		}
-		if (requestId == null)
-		{
-			SendError(module, Constants.Errors.InvalidRequestId);
-			return;
-		}
-
-		if (!RequestHandlers.ContainsKey(type))
-		{
-			SendError(module, Constants.Errors.UnknownRequest, requestId);
-			return;
-		}
-
-		var moduleRequestHandler = RequestHandlers[type];
-		foreach (var parameter in moduleRequestHandler.ParametersRequired)
-		{
-			if (request.ContainsKey(parameter.ParameterName))
-			{
-				if (request[parameter.ParameterName].Type != parameter.ParameterType)
-				{
-					SendError(module, Constants.Errors.MalformedRequest, requestId);
-					return;
-				}
-			}
-			else
-			{
-				if (!parameter.Optional)
-				{
-					SendError(module, Constants.Errors.MalformedRequest, requestId);
-					return;
-				}
-			}
-		}
-		moduleRequestHandler.Handler.Invoke(module, requestId, request);
-	}
-	catch (JsonReaderException e)
-	{
-		SendError(module, Constants.Errors.MalformedRequest);
-		Console.WriteLine($"Data: '{data}'. Error: {e.ToString()}");
-	}
-}
-
-internal static void OnModuleDisconnected(Module module)
-{
-	// TODO recheck dependencies, hooks, registered modules, unregistered modules.
-}
-
-internal static void TriggerHook(Module module, string hook, bool sticky, bool force = false)
-{
-	// @param module is triggering a hook
-	// if @param force is true, all modules gets the hook, regardless of whether they want it or not
-	var hookName = module.ModuleID + "." + hook;
-	foreach(var registeredModule in RegisteredModules.Values)
-	{
-		if(force || registeredModule.RegisteredHooks.Contains(hookName))
-		{
-			Send(
-				registeredModule,
-				new JObject
-				{
-					[Constants.RequestId] = DateTime.Now.Ticks,
-					[Constants.Type] = Constants.HookCalled,
-					[Constants.Hook] = hookName
-				}
-			);
-		}
-	}
-	if(sticky)
-	{
-		// TODO sticky this hook somewhere so that new modules can get it
-	}
-}
-
-private static void HandleModuleRegistration(Module module, string requestId, JObject request)
-{
-	module.ModuleID = request[Constants.ModuleId].ToObject<string>();
-	module.Version = request[Constants.Version].ToObject<string>();
-	module.RegistrationRequestID = requestId;
-	module.Dependencies.Clear();
-
-	var dependencies = request[Constants.Dependencies]?.ToObject<JObject>();
-
-	if (dependencies == null || dependencies.Count == 0)
-	{
-		RegisteredModules.Add(module.ModuleID, module);
-
-		module.Registered = true;
-
-		Send(
-			module,
-			new JObject
-			{
-				[Constants.RequestId] = requestId,
-				[Constants.Type] = Constants.ModuleRegistered
-			}
-		);
-	}
-	else
-	{
-		module.Registered = false;
-
-		foreach(var token in dependencies)
-		{
-			if(token.Value.Type != JTokenType.String)
-				continue;
-			module.Dependencies.Add(token.Key, token.Value.ToObject<string>());
-		}
-		UnRegisteredModules.Add(module.ModuleID, module);
-	}
-
-	RecalculateAllModulesDependencies();
-}
-
-private static void RecalculateAllModulesDependencies()
-{
-	var satisfiedModules = new List<string>();
-	foreach(var module in UnRegisteredModules)
-	{
-		// For each module, check if the dependencies are satisfied.
-		var dependencySatisfied = true;
-		foreach(var dependencyRequired in module.Value.Dependencies)
-		{
-			if(!RegisteredModules.ContainsKey(dependencyRequired.Key) && !UnRegisteredModules.ContainsKey(dependencyRequired.Key))
-			{
-				dependencySatisfied = false;
-				break;
-			}
-			// TODO CHECK VERSION AS WELL
-		}
-		if(dependencySatisfied)
-		{
-			satisfiedModules.Add(module.Value.ModuleID);
-		}
-	}
-
-	foreach(var moduleId in satisfiedModules)
-	{
-		var module = UnRegisteredModules[moduleId];
-		RegisteredModules.Add(module.ModuleID, module);
-		UnRegisteredModules.Remove(moduleId);
-
-		Send(
-			module,
-			new JObject
-			{
-				[Constants.RequestId] = module.RegistrationRequestID,
-				[Constants.Type] = Constants.ModuleRegistered
-			}
-		);
-	}
-}
-
-private static void HandleFunctionCall(Module originModule, string requestId, JObject request)
-{
-	if (!originModule.Registered)
-	{
-		SendError(originModule, Constants.Errors.UnregisteredModule, requestId);
-		return;
-	}
-
-	var function = request[Constants.Function].ToObject<string>();
-	if (!IsFunctionName(function, out var moduleName, out var functionName))
-	{
-		SendError(originModule, Constants.Errors.UnknownFunction, requestId);
-		return;
-	}
-
-	if (!RegisteredModules.ContainsKey(moduleName))
-	{
-		SendError(originModule, Constants.Errors.UnknownModule);
-		return;
-	}
-
-	var recieverModule = RegisteredModules[moduleName];
-	if (!recieverModule.DeclaredFunctions.Contains(functionName))
-	{
-		SendError(originModule, Constants.Errors.UnknownFunction);
-		return;
-	}
-
-	if (RequestOrigins.ContainsKey(requestId))
-	{
-		if (RequestOrigins[requestId] != originModule.ModuleID)
-		{
-			// There's already a requestId that's supposed to return to
-			// a different module. Let the module know that it's invalid
-			// so that we can prevent response-hijacking.
-			SendError(originModule, Constants.Errors.InvalidRequestId, requestId);
-			return;
-		}
-	}
-	else
-	{
-		RequestOrigins.Add(requestId, originModule.ModuleID);
-	}
-
-	if (request[Constants.Arguments] == null)
-	{
-		request.Add(Constants.Arguments, new JObject());
-	}
-
-	// We're all done processing the request.
-	// Now just proxy the request that we got to the destination module
-	request[Constants.Function].Replace(functionName);
-
-	Send(recieverModule, request);
-}
-
-private static void HandleFunctionResponse(Module module, string requestId, JObject request)
-{
-	if (!module.Registered)
-	{
-		SendError(module, Constants.Errors.UnregisteredModule, requestId);
-		return;
-	}
-
-	var data = request[Constants.Data].ToObject<JObject>();
-
-	if (!RequestOrigins.ContainsKey(requestId))
-	{
-		// If the given requestId does not contain an origin,
-		// drop the packet entirely
-		return;
-	}
-
-	var originModuleId = RequestOrigins[requestId];
-
-	if (!RegisteredModules.ContainsKey(originModuleId))
-	{
-		// The origin module has probably disconnected.
-		// Drop the packet entirely
-		return;
-	}
-
-	Send(RegisteredModules[originModuleId], request);
-}
-
-private static void HandleRegisterHook(Module module, string requestId, JObject request)
-{
-	// @param module wants to listen for a hook
-	var hook = request[Constants.Hook].ToObject<string>();
-
-	if(!module.RegisteredHooks.Contains(hook))
-		module.RegisteredHooks.Add(hook);
-
-	Send(
-		module,
-		new JObject
-		{
-			[Constants.RequestId] = requestId,
-			[Constants.Type] = Constants.HookRegistered
-		}
-	);
-}
-
-private static void HandleTriggerHook(Module module, string requestId, JObject request)
-{
-	// @param module is triggering a hook
-	var hook = request[Constants.Hook].ToObject<string>();
-	var data = request[Constants.Data]?.ToObject<JObject>();
-
-	TriggerHook(module, hook, false);
-
-	Send(
-		module,
-		new JObject
-		{
-			[Constants.RequestId] = requestId,
-			[Constants.Type] = Constants.HookTriggered
-		}
-	);
-}
-
-private static void HandleDeclareFunction(Module module, string requestId, JObject request)
-{
-	var function = request[Constants.Function].ToObject<string>();
-	if (!module.DeclaredFunctions.Contains(function))
-		module.DeclaredFunctions.Add(function);
-
-	Send(
-		module,
-		new JObject
-		{
-			[Constants.RequestId] = requestId,
-			[Constants.Type] = Constants.FunctionDeclared,
-			[Constants.Function] = function
-		}
-	);
-}
-
-private static void Send(Module module, JObject data)
-{
-	var stringified = data.ToString(Constants.JsonFormatting) + "\n";
-	var writeBuffer = Encoding.UTF8.GetBytes(stringified);
-	module.SendBytes(writeBuffer);
-}
-
-private static void SendError(Module module, string error, string? requestId = null)
-{
-	if (requestId == null)
-	{
-		Send(
-			module,
-			new JObject
-			{
-				[Constants.Type] = Constants.Error,
-				[Constants.Error] = error
-			}
-		);
-	}
-	else
-	{
-		Send(
-			module,
-			new JObject
-			{
-				[Constants.Type] = Constants.Error,
-				[Constants.RequestId] = requestId,
-				[Constants.Error] = error
-			}
-		);
-	}
-}
-
-private static bool IsFunctionName(string name, out string moduleName, out string functionName)
-{
-	moduleName = string.Empty;
-	functionName = string.Empty;
-
-	if (!name.Contains("."))
-		return false;
-
-	var parts = name.Split(".", StringSplitOptions.None);
-	if (parts.Length != 2)
-		return false;
-
-	foreach (var letter in parts[0])
-	{
-		if (!char.IsLetterOrDigit(letter) && !(letter == '-') && !(letter == '_'))
-			return false;
-	}
-
-	foreach (var letter in parts[1])
-	{
-		if (!char.IsLetterOrDigit(letter) && !(letter == '_'))
-			return false;
-	}
-
-	moduleName = parts[0];
-	functionName = parts[1];
-
-	return true;
-}
-*/

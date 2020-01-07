@@ -1,3 +1,4 @@
+use super::data_handler;
 use crate::models::ModuleComm;
 
 use async_std::fs::remove_file;
@@ -42,13 +43,14 @@ async fn handle_client(stream: Result<UnixStream>) {
 	let stream = stream.unwrap();
 	let (sender, mut receiver) = unbounded::<String>();
 
-	let uuid: u128 = thread_rng().gen();
+	let mut uuid: u128 = thread_rng().gen();
+	while uuid != 0 && data_handler::is_uuid_exists(&uuid).await {
+		uuid = thread_rng().gen();
+	}
 	let module_comm = ModuleComm::new(uuid, stream, sender);
 
 	let read_future = module_comm.read_data_loop();
 	let write_future = module_comm.write_data_loop(&mut receiver);
 
 	future::join(read_future, write_future).await;
-
-	println!("Closing socket");
 }

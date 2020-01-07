@@ -30,8 +30,8 @@ impl ModuleComm {
 		}
 	}
 
-	pub fn get_uuid(&self) -> u128 {
-		self.module_uuid
+	pub fn get_uuid(&self) -> &u128 {
+		&self.module_uuid
 	}
 
 	pub fn clone_sender(&self) -> UnboundedSender<String> {
@@ -40,7 +40,7 @@ impl ModuleComm {
 
 	pub async fn send(&self, data: String) {
 		let mut sender = &self.socket_sender;
-		let result = sender.send(data).await;
+		let result = sender.send(data + "\n").await;
 		if let Err(error) = result {
 			println!("Error queing data to module: {}", error);
 		}
@@ -63,6 +63,7 @@ impl ModuleComm {
 			data_handler::handle_request(&self, line).await;
 		}
 
+		data_handler::on_module_disconnected(&self).await;
 		self.close_sender().await;
 	}
 

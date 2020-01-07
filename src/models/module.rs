@@ -1,9 +1,18 @@
+use crate::utils::constants;
+
 use std::collections::HashMap;
 
 use futures::channel::mpsc::UnboundedSender;
 use futures_util::sink::SinkExt;
 
-#[allow(dead_code)]
+lazy_static! {
+	pub static ref GOTHAM_MODULE: Module = Module::internal(
+		0,
+		String::from(constants::APP_NAME),
+		String::from(constants::APP_VERSION),
+	);
+}
+
 pub struct Module {
 	registered: bool,
 	module_uuid: u128,
@@ -14,7 +23,7 @@ pub struct Module {
 	// These are the (global) hooks that this particular module is listening for
 	registered_hooks: Vec<String>,
 
-	module_sender: UnboundedSender<String>,
+	module_sender: Option<UnboundedSender<String>>,
 }
 
 #[allow(dead_code)]
@@ -34,7 +43,21 @@ impl Module {
 			declared_functions: vec![],
 			registered_hooks: vec![],
 
-			module_sender,
+			module_sender: Some(module_sender),
+		}
+	}
+
+	fn internal(module_uuid: u128, module_id: String, version: String) -> Self {
+		Module {
+			registered: true,
+			module_uuid,
+			module_id,
+			version,
+			dependencies: HashMap::new(),
+			declared_functions: vec![],
+			registered_hooks: vec![],
+
+			module_sender: None,
 		}
 	}
 
@@ -54,6 +77,14 @@ impl Module {
 		self.module_id = module_id;
 	}
 
+	// Exposing module_uuid
+	pub fn get_module_uuid(&self) -> &u128 {
+		&self.module_uuid
+	}
+	pub fn set_module_uuid(&mut self, module_uuid: u128) {
+		self.module_uuid = module_uuid;
+	}
+
 	// Exposing version
 	pub fn get_version(&self) -> &String {
 		&self.version
@@ -65,6 +96,9 @@ impl Module {
 	// Exposing dependencies
 	pub fn set_dependencies(&mut self, dependencies: HashMap<String, String>) {
 		self.dependencies = dependencies;
+	}
+	pub fn get_dependencies(&self) -> &HashMap<String, String> {
+		&self.dependencies
 	}
 	pub fn get_dependency(&mut self, module_id: &String) -> Option<&String> {
 		self.dependencies.get(module_id)
@@ -87,10 +121,31 @@ impl Module {
 	}
 
 	pub async fn send(&self, data: String) {
-		let mut sender = &self.module_sender;
-		let result = sender.send(data).await;
+		let sender = &self.module_sender;
+
+		if let None = sender {
+			return;
+		}
+
+		let mut sender = sender.as_ref().unwrap();
+		let result = sender.send(data + "\n").await;
 		if let Err(error) = result {
 			println!("Error queing data to module: {}", error);
+		}
+	}
+
+	pub async fn close_sender(&self) {
+		let sender = &self.module_sender;
+
+		if let None = sender {
+			return;
+		}
+
+		let mut sender = sender.as_ref().unwrap();
+		let result = sender.close().await;
+		if let Err(error) = result {
+			println!("Error closing module's sending queue: {}", error);
+			return;
 		}
 	}
 }
