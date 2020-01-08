@@ -40,7 +40,7 @@ impl ModuleComm {
 
 	pub async fn send(&self, data: String) {
 		let mut sender = &self.socket_sender;
-		let result = sender.send(data + "\n").await;
+		let result = sender.send(data).await;
 		if let Err(error) = result {
 			println!("Error queing data to module: {}", error);
 		}

@@ -46,8 +46,20 @@ pub async fn handle_request(module_comm: &ModuleComm, data: String) {
 		request_types::MODULE_REGISTRATION => {
 			handle_module_registration(module_comm, request_id, &input).await;
 		}
+		request_types::DECLARE_FUNCTION => {
+			handle_declare_function(module_comm, request_id, &input).await;
+		}
 		request_types::FUNCTION_CALL => {
 			handle_function_call(module_comm, request_id, &input).await;
+		}
+		request_types::FUNCTION_RESPONSE => {
+			handle_function_response(module_comm, request_id, &input).await;
+		}
+		request_types::REGISTER_HOOK => {
+			handle_register_hook(module_comm, request_id, &input).await;
+		}
+		request_types::TRIGGER_HOOK => {
+			handle_trigger_hook(module_comm, request_id, &input).await;
 		}
 		_ => {
 			send_error(module_comm, request_id, errors::UNKNOWN_REQUEST).await;
@@ -74,14 +86,12 @@ pub async fn on_module_disconnected(_module_comm: &ModuleComm) {
 			.unwrap()
 			.close_sender()
 			.await;
-			println!("Removed");
 	} else if unregistered_modules.contains_key(&module_id) {
 		unregistered_modules
 			.remove(&module_id)
 			.unwrap()
 			.close_sender()
 			.await;
-			println!("Removed");
 	}
 	*/
 }
@@ -91,7 +101,13 @@ pub async fn is_uuid_exists(uuid: &u128) -> bool {
 }
 
 #[allow(dead_code)]
-async fn trigger_hook(module: &Module, hook: &str, sticky: bool, force: bool) {
+async fn trigger_hook(
+	module: &Module,
+	hook: &str,
+	data: &Map<String, Value>,
+	sticky: bool,
+	force: bool,
+) {
 	// module is trying to trigger a hook.
 	// if force is true, all modules get the hook, regardless of whether they want it or not
 	let module_id = module.get_module_id();
@@ -99,16 +115,16 @@ async fn trigger_hook(module: &Module, hook: &str, sticky: bool, force: bool) {
 
 	for registered_module in REGISTERED_MODULES.lock().await.values() {
 		if force || registered_module.is_hook_registered(&hook_name) {
-			registered_module
-				.send(
-					json!({
-						request_keys::REQUEST_ID: generate_request_id().await,
-						request_keys::TYPE: request_types::HOOK_TRIGGERED,
-						request_keys::HOOK: hook_name
-					})
-					.to_string(),
-				)
-				.await;
+			send_module(
+				registered_module,
+				&json!({
+					request_keys::REQUEST_ID: generate_request_id().await,
+					request_keys::TYPE: request_types::HOOK_TRIGGERED,
+					request_keys::HOOK: hook_name,
+					request_keys::DATA: data
+				}),
+			)
+			.await;
 		}
 	}
 
@@ -132,16 +148,15 @@ async fn trigger_hook_on(from_module: &Module, to_module_id: &String, hook: &str
 	let to_module = to_module.unwrap();
 
 	if force || to_module.is_hook_registered(&hook_name) {
-		to_module
-			.send(
-				json!({
-					request_keys::REQUEST_ID: generate_request_id().await,
-					request_keys::TYPE: request_types::HOOK_TRIGGERED,
-					request_keys::HOOK: hook_name
-				})
-				.to_string(),
-			)
-			.await;
+		send_module(
+			to_module,
+			&json!({
+				request_keys::REQUEST_ID: generate_request_id().await,
+				request_keys::TYPE: request_types::HOOK_TRIGGERED,
+				request_keys::HOOK: hook_name
+			}),
+		)
+		.await;
 	}
 }
 
@@ -195,20 +210,23 @@ async fn handle_module_registration(module_comm: &ModuleComm, request_id: &str, 
 	}
 
 	// Register that this uuid belongs to this moduleId
-	MODULE_UUID_TO_ID
-		.lock()
-		.await
-		.insert(module_comm.get_uuid().clone(), String::from(module_id));
+	// check if this module_comm already has a corresponding module
+	let mut module_uuid_to_id = MODULE_UUID_TO_ID.lock().await;
+	if module_uuid_to_id.contains_key(module_comm.get_uuid()) {
+		send_error(module_comm, request_id, errors::DUPLICATE_MODULE).await;
+		return;
+	}
+	module_uuid_to_id.insert(module_comm.get_uuid().clone(), String::from(module_id));
+	drop(module_uuid_to_id);
 
-	module
-		.send(
-			json!({
-				request_keys::REQUEST_ID: generate_request_id().await,
-				request_keys::TYPE: request_types::MODULE_REGISTERED
-			})
-			.to_string(),
-		)
-		.await;
+	send_module(
+		&module,
+		&json!({
+			request_keys::REQUEST_ID: generate_request_id().await,
+			request_keys::TYPE: request_types::MODULE_REGISTERED
+		}),
+	)
+	.await;
 
 	if module.get_dependencies().len() == 0 {
 		module.set_registered(true);
@@ -277,11 +295,52 @@ async fn recalculate_all_module_dependencies() {
 	}
 }
 
+async fn handle_declare_function(module_comm: &ModuleComm, request_id: &str, request: &Value) {
+	let module_id = get_module_id_for_uuid(&module_comm.get_uuid()).await;
+
+	if let None = module_id {
+		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
+		return;
+	}
+	let module_id = module_id.unwrap();
+
+	let mut registered_modules = REGISTERED_MODULES.lock().await;
+
+	// Check if module is registered
+	if !registered_modules.contains_key(&module_id) {
+		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
+		return;
+	}
+
+	let module = registered_modules.get_mut(&module_id).unwrap();
+	let function = request[request_keys::FUNCTION].as_str();
+	if let None = function {
+		send_error(module_comm, request_id, errors::MALFORMED_REQUEST).await;
+		return;
+	}
+	let function = function.unwrap();
+	let function = String::from(function);
+	if !module.is_function_declared(&function) {
+		module.declare_function(function.clone());
+	}
+
+	send_module(
+		module,
+		&json!(
+		{
+			request_keys::REQUEST_ID: request_id,
+			request_keys::TYPE: request_types::FUNCTION_DECLARED,
+			request_keys::FUNCTION: function
+		}),
+	)
+	.await;
+}
+
 async fn handle_function_call(module_comm: &ModuleComm, request_id: &str, request: &Value) {
 	let module_id = get_module_id_for_uuid(&module_comm.get_uuid()).await;
 
 	if let None = module_id {
-		send_error(module_comm, request_id, errors::UNKNOWN_REQUEST).await;
+		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
 		return;
 	}
 	let module_id = module_id.unwrap();
@@ -341,7 +400,129 @@ async fn handle_function_call(module_comm: &ModuleComm, request_id: &str, reques
 
 	response[request_keys::FUNCTION] = Value::String(function_name);
 
-	receiver_module.send(response.to_string()).await;
+	send_module(receiver_module, &response).await;
+}
+
+async fn handle_function_response(module_comm: &ModuleComm, request_id: &str, request: &Value) {
+	let module_id = get_module_id_for_uuid(&module_comm.get_uuid()).await;
+
+	if let None = module_id {
+		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
+		return;
+	}
+	let module_id = module_id.unwrap();
+
+	// Check if module is registered
+	let registered_modules = REGISTERED_MODULES.lock().await;
+	if !registered_modules.contains_key(&module_id) {
+		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
+		return;
+	}
+
+	let request_origins = REQUEST_ORIGINS.lock().await;
+
+	if !request_origins.contains_key(request_id) {
+		// If the given requestId does not contain an origin,
+		// drop the packet entirely
+		return;
+	}
+
+	let origin_module_id = request_origins.get(&String::from(request_id)).unwrap();
+
+	if !registered_modules.contains_key(origin_module_id) {
+		// The origin module has probably disconnected.
+		// Drop the packet entirely
+		return;
+	}
+
+	send_module(registered_modules.get(origin_module_id).unwrap(), request).await;
+}
+
+async fn handle_register_hook(module_comm: &ModuleComm, request_id: &str, request: &Value) {
+	// The module who is calling this function wants to listen for a hook
+	let module_id = get_module_id_for_uuid(&module_comm.get_uuid()).await;
+
+	if let None = module_id {
+		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
+		return;
+	}
+	let module_id = module_id.unwrap();
+
+	let mut registered_modules = REGISTERED_MODULES.lock().await;
+
+	let module = registered_modules.get_mut(&module_id);
+	if let None = module {
+		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
+		return;
+	}
+	let module = module.unwrap();
+
+	let hook = request[request_keys::HOOK].as_str();
+	if hook == None {
+		send_error(module_comm, request_id, errors::MALFORMED_REQUEST).await;
+		return;
+	}
+	let hook = String::from(hook.unwrap());
+
+	if !module.is_hook_registered(&hook) {
+		module.register_hook(hook);
+	}
+
+	send_module(
+		module,
+		&json!(
+		{
+			request_keys::REQUEST_ID: request_id,
+			request_keys::TYPE: request_types::HOOK_REGISTERED
+		}),
+	)
+	.await;
+}
+
+async fn handle_trigger_hook(module_comm: &ModuleComm, request_id: &str, request: &Value) {
+	// The module who is calling this function is triggering a hook
+	let module_id = get_module_id_for_uuid(&module_comm.get_uuid()).await;
+
+	if let None = module_id {
+		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
+		return;
+	}
+	let module_id = module_id.unwrap();
+
+	let mut registered_modules = REGISTERED_MODULES.lock().await;
+
+	let module = registered_modules.get_mut(&module_id);
+	if let None = module {
+		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
+		return;
+	}
+	let module = module.unwrap();
+
+	let hook = request[request_keys::HOOK].as_str();
+	if hook == None {
+		send_error(module_comm, request_id, errors::MALFORMED_REQUEST).await;
+		return;
+	}
+	let hook = hook.unwrap();
+
+	let data = request[request_keys::DATA].as_object();
+	let data = if data == None {
+		Map::new()
+	} else {
+		data.unwrap().clone()
+	};
+
+	trigger_hook(&module, &hook, &data, false, false).await;
+
+	send_module(
+		module,
+		&json!(
+		{
+			request_keys::REQUEST_ID: request_id,
+			request_keys::TYPE: request_types::HOOK_TRIGGERED
+		}),
+	)
+	.await;
 }
 
 fn is_function_name(name: &str) -> Option<(String, String)> {
@@ -377,10 +558,10 @@ async fn get_module_id_for_uuid(module_uuid: &u128) -> Option<String> {
 }
 
 async fn generate_request_id() -> String {
-	String::from(format!("gotham{}", get_current_millis()))
+	String::from(format!("gotham{}", get_current_nanos()))
 }
 
-fn get_current_millis() -> u128 {
+fn get_current_nanos() -> u128 {
 	SystemTime::now()
 		.duration_since(UNIX_EPOCH)
 		.expect("Time went backwards. Wtf?")
@@ -388,14 +569,21 @@ fn get_current_millis() -> u128 {
 }
 
 async fn send_error(module_comm: &ModuleComm, request_id: &str, error_code: u32) {
-	module_comm
-		.send(
-			json!({
-				request_keys::REQUEST_ID: request_id,
-				request_keys::TYPE: request_types::ERROR,
-				request_keys::ERROR: error_code
-			})
-			.to_string(),
-		)
-		.await;
+	send_module_comm(
+		module_comm,
+		&json!({
+			request_keys::REQUEST_ID: request_id,
+			request_keys::TYPE: request_types::ERROR,
+			request_keys::ERROR: error_code
+		}),
+	)
+	.await;
+}
+
+async fn send_module_comm(module_comm: &ModuleComm, data: &Value) {
+	module_comm.send(data.to_string() + "\n").await;
+}
+
+async fn send_module(module: &Module, data: &Value) {
+	module.send(data.to_string() + "\n").await;
 }

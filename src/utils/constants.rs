@@ -20,6 +20,7 @@ pub mod request_keys {
 	pub const FUNCTION: &str = "function";
 	pub const HOOK: &str = "hook";
 	pub const ARGUMENTS: &str = "arguments";
+	pub const DATA: &str = "data";
 }
 
 #[allow(dead_code)]

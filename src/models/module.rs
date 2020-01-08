@@ -128,7 +128,7 @@ impl Module {
 		}
 
 		let mut sender = sender.as_ref().unwrap();
-		let result = sender.send(data + "\n").await;
+		let result = sender.send(data).await;
 		if let Err(error) = result {
 			println!("Error queing data to module: {}", error);
 		}

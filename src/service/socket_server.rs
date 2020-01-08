@@ -15,7 +15,16 @@ use rand::{thread_rng, Rng};
 
 pub async fn listen(socket_path: &Path) -> Result<()> {
 	// TODO Try to aquire a lock on the lock file first.
-	// If lock fails, return an error
+	/*
+	let mut lock_file_path = socket_path.to_str().unwrap().to_owned();
+	lock_file_path.push_str(".lock");
+	
+	let _file_lock = match FileLock::lock(&lock_file_path, false, true) {
+		Ok(lock) => lock,
+		// If lock fails, return an error
+		Err(err) => panic!("Error getting file lock: {}", err)
+	};
+	*/
 
 	// File lock is aquired. If the unix socket exists, then it's clearly a dangling socket. Feel free to delete it
 	if socket_path.exists().await {
