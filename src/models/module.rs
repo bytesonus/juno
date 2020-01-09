@@ -5,11 +5,13 @@ use std::collections::HashMap;
 use futures::channel::mpsc::UnboundedSender;
 use futures_util::sink::SinkExt;
 
+use semver::{Version, VersionReq};
+
 lazy_static! {
 	pub static ref GOTHAM_MODULE: Module = Module::internal(
 		0,
 		String::from(constants::APP_NAME),
-		String::from(constants::APP_VERSION),
+		Version::parse(constants::APP_VERSION).unwrap(),
 	);
 }
 
@@ -17,8 +19,8 @@ pub struct Module {
 	registered: bool,
 	module_uuid: u128,
 	module_id: String,
-	version: String,
-	dependencies: HashMap<String, String>,
+	version: Version,
+	dependencies: HashMap<String, VersionReq>,
 	declared_functions: Vec<String>,
 	// These are the (global) hooks that this particular module is listening for
 	registered_hooks: Vec<String>,
@@ -31,7 +33,7 @@ impl Module {
 	pub fn new(
 		module_uuid: u128,
 		module_id: String,
-		version: String,
+		version: Version,
 		module_sender: UnboundedSender<String>,
 	) -> Self {
 		Module {
@@ -47,7 +49,7 @@ impl Module {
 		}
 	}
 
-	fn internal(module_uuid: u128, module_id: String, version: String) -> Self {
+	fn internal(module_uuid: u128, module_id: String, version: Version) -> Self {
 		Module {
 			registered: true,
 			module_uuid,
@@ -86,21 +88,21 @@ impl Module {
 	}
 
 	// Exposing version
-	pub fn get_version(&self) -> &String {
+	pub fn get_version(&self) -> &Version {
 		&self.version
 	}
-	pub fn set_version(&mut self, version: String) {
+	pub fn set_version(&mut self, version: Version) {
 		self.version = version;
 	}
 
 	// Exposing dependencies
-	pub fn set_dependencies(&mut self, dependencies: HashMap<String, String>) {
+	pub fn set_dependencies(&mut self, dependencies: HashMap<String, VersionReq>) {
 		self.dependencies = dependencies;
 	}
-	pub fn get_dependencies(&self) -> &HashMap<String, String> {
+	pub fn get_dependencies(&self) -> &HashMap<String, VersionReq> {
 		&self.dependencies
 	}
-	pub fn get_dependency(&mut self, module_id: &String) -> Option<&String> {
+	pub fn get_dependency(&mut self, module_id: &String) -> Option<&VersionReq> {
 		self.dependencies.get(module_id)
 	}
 

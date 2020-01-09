@@ -13,6 +13,8 @@ use async_std::sync::Mutex;
 
 use serde_json::{json, Map, Value};
 
+use semver::{Version, VersionReq};
+
 lazy_static! {
 	static ref REGISTERED_MODULES: Mutex<HashMap<String, Module>> = Mutex::new(HashMap::new());
 	static ref UNREGISTERED_MODULES: Mutex<HashMap<String, Module>> = Mutex::new(HashMap::new());
@@ -67,9 +69,8 @@ pub async fn handle_request(module_comm: &ModuleComm, data: String) {
 	}
 }
 
-pub async fn on_module_disconnected(_module_comm: &ModuleComm) {
-	// TODO recheck dependencies, hooks, registered modules, unregistered modules.
-	/*
+pub async fn on_module_disconnected(module_comm: &ModuleComm) {
+	// recheck dependencies
 	let module_id = get_module_id_for_uuid(&module_comm.get_uuid()).await;
 
 	if let None = module_id {
@@ -93,7 +94,10 @@ pub async fn on_module_disconnected(_module_comm: &ModuleComm) {
 			.close_sender()
 			.await;
 	}
-	*/
+	drop(registered_modules);
+	drop(unregistered_modules);
+
+	recalculate_all_module_dependencies().await;
 }
 
 pub async fn is_uuid_exists(uuid: &u128) -> bool {
@@ -186,17 +190,27 @@ async fn handle_module_registration(module_comm: &ModuleComm, request_id: &str, 
 				send_error(module_comm, request_id, errors::MALFORMED_REQUEST).await;
 				return;
 			}
-			dependency_map.insert(
-				dependency.clone(),
-				String::from(dependencies[dependency].as_str().unwrap()),
-			);
+			let dependency_requirement =
+				VersionReq::parse(dependencies[dependency].as_str().unwrap());
+			if let Err(_) = dependency_requirement {
+				send_error(module_comm, request_id, errors::MALFORMED_REQUEST).await;
+				return;
+			}
+			dependency_map.insert(dependency.clone(), dependency_requirement.unwrap());
 		}
 	}
+
+	let version = Version::parse(version);
+	if let Err(_) = version {
+		send_error(module_comm, request_id, errors::MALFORMED_REQUEST).await;
+		return;
+	}
+	let version = version.unwrap();
 
 	let mut module = Module::new(
 		module_comm.get_uuid().clone(),
 		String::from(module_id),
-		String::from(version),
+		version,
 		module_comm.clone_sender(),
 	);
 	module.set_dependencies(dependency_map);
@@ -265,11 +279,21 @@ async fn recalculate_all_module_dependencies() {
 		// For each module, check if the dependencies are satisfied
 		let mut dependency_satisfied = true;
 
-		for (dependency, _) in module.get_dependencies() {
-			// TODO check version as well
-			if !registered_modules.contains_key(dependency)
-				&& !unregistered_modules.contains_key(dependency)
-			{
+		for (dependency, version_req) in module.get_dependencies() {
+			if registered_modules.contains_key(dependency) {
+				if !version_req.matches(&registered_modules.get(dependency).unwrap().get_version())
+				{
+					dependency_satisfied = false;
+					break;
+				}
+			} else if unregistered_modules.contains_key(dependency) {
+				if !version_req
+					.matches(&unregistered_modules.get(dependency).unwrap().get_version())
+				{
+					dependency_satisfied = false;
+					break;
+				}
+			} else {
 				dependency_satisfied = false;
 				break;
 			}
@@ -292,6 +316,46 @@ async fn recalculate_all_module_dependencies() {
 		)
 		.await;
 		registered_modules.insert(module_id, module);
+	}
+
+	// List of all modules whose dependencies were satisfied but aren't now
+	let mut unsatisfied_modules: Vec<String> = vec![];
+
+	// remove modules whose dependencies are no longer satisfied
+	for (module_id, module) in registered_modules.iter() {
+		// For each module, check if the dependencies are satisfied
+		let mut dependency_satisfied = true;
+
+		for (dependency, version_req) in module.get_dependencies() {
+			if registered_modules.contains_key(dependency) {
+				if !version_req.matches(&registered_modules.get(dependency).unwrap().get_version())
+				{
+					dependency_satisfied = false;
+					break;
+				}
+			} else {
+				dependency_satisfied = false;
+				break;
+			}
+		}
+
+		if dependency_satisfied {
+			unsatisfied_modules.push(module_id.clone());
+		}
+	}
+
+	// For all modules whose dependencies are no longer satisfied, unregister them
+	for module_id in unsatisfied_modules {
+		let module = registered_modules.remove(&module_id).unwrap();
+
+		trigger_hook_on(
+			&module::GOTHAM_MODULE,
+			&module_id,
+			gotham_hooks::DEACTIVATED,
+			true,
+		)
+		.await;
+		unregistered_modules.insert(module_id, module);
 	}
 }
 

@@ -1,5 +1,6 @@
 use super::data_handler;
 use crate::models::ModuleComm;
+use crate::utils::constants;
 
 use async_std::fs::remove_file;
 use async_std::io::Result;
@@ -8,23 +9,27 @@ use async_std::path::Path;
 use async_std::prelude::StreamExt;
 use async_std::task;
 
-use futures::channel::mpsc::unbounded;
+use futures::channel::mpsc::{unbounded, UnboundedSender, UnboundedReceiver};
 use futures::future;
 
 use rand::{thread_rng, Rng};
 
+use file_lock::FileLock;
+
+lazy_static! {
+	static ref CLOSE_HANDLERS: (UnboundedSender<bool>, UnboundedReceiver<bool>) = unbounded::<bool>();
+}
+
 pub async fn listen(socket_path: &Path) -> Result<()> {
-	// TODO Try to aquire a lock on the lock file first.
-	/*
+	// Try to aquire a lock on the lock file first.
 	let mut lock_file_path = socket_path.to_str().unwrap().to_owned();
 	lock_file_path.push_str(".lock");
 	
 	let _file_lock = match FileLock::lock(&lock_file_path, false, true) {
 		Ok(lock) => lock,
 		// If lock fails, return an error
-		Err(err) => panic!("Error getting file lock: {}", err)
+		Err(_) => panic!("Unable to aquire socket file lock. Are there any other instances of {} running?", constants::APP_NAME)
 	};
-	*/
 
 	// File lock is aquired. If the unix socket exists, then it's clearly a dangling socket. Feel free to delete it
 	if socket_path.exists().await {
