@@ -1,4 +1,5 @@
 use crate::service::data_handler;
+use crate::utils::logger;
 
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::sink::SinkExt;
@@ -63,8 +64,11 @@ impl ModuleComm {
 			data_handler::handle_request(&self, line).await;
 		}
 
+		logger::verbose("Closed socket. Disconnecting module...");
 		data_handler::on_module_disconnected(&self).await;
+		logger::verbose("Module disconnected. Closing sender...");
 		self.close_sender().await;
+		logger::verbose("Sender closed");
 	}
 
 	pub async fn write_data_loop(&self, receiver: &mut UnboundedReceiver<String>) {

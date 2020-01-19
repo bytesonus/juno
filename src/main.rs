@@ -2,6 +2,7 @@
 extern crate lazy_static;
 extern crate async_std;
 extern crate clap;
+extern crate colored;
 extern crate ctrlc;
 extern crate file_lock;
 extern crate rand;
@@ -18,6 +19,7 @@ use clap::{App, Arg};
 
 use service::socket_server;
 use utils::constants;
+use utils::logger::{self, LogLevel};
 
 // TODO logging
 fn main() {
@@ -38,7 +40,7 @@ fn main() {
 			Arg::with_name("V")
 				.short("V")
 				.multiple(true)
-				.help("Sets the level of verbosity"),
+				.help("Sets the level of verbosity (max 3)"),
 		)
 		.arg(
 			Arg::with_name("modules-location")
@@ -66,15 +68,30 @@ fn main() {
 		.value_of("socket-location")
 		.unwrap_or(constants::DEFAULT_SOCKET_LOCATION);
 
-	ctrlc::set_handler(move || task::block_on(on_exit())).expect("Unable to set Ctrl-C handler");
+	let verbosity = match args.occurrences_of("V") {
+		0 => LogLevel::Warn,
+		1 => LogLevel::Debug,
+		2 => LogLevel::Info,
+		3 | _ => LogLevel::Verbose,
+	};
+	logger::set_verbosity(verbosity);
+
+	logger::info(&format!(
+		"Starting {} with socket location {}",
+		constants::APP_NAME,
+		socket_location
+	));
+
+	// ctrlc::set_handler(move || task::block_on(on_exit())).expect("Unable to set Ctrl-C handler");
 
 	let socket_task = socket_server::listen(Path::new(socket_location));
 
 	if let Err(err) = task::block_on(socket_task) {
-		println!("Error creating socket: {}", err);
+		logger::error(&format!("Error creating socket: {}", err));
 	}
 }
 
+#[allow(dead_code)]
 async fn on_exit() {
 	();
 }
