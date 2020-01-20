@@ -1,13 +1,13 @@
-use crate::service::data_handler;
-use crate::utils::logger;
+use crate::{service::data_handler, utils::logger};
 
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::sink::SinkExt;
 
-use async_std::io::BufReader;
-use async_std::os::unix::net::UnixStream;
-use async_std::prelude::StreamExt;
-use async_std::prelude::*;
+use async_std::{
+	io::BufReader,
+	os::unix::net::UnixStream,
+	prelude::{StreamExt, *},
+};
 
 #[allow(dead_code)]
 pub struct ModuleComm {

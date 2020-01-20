@@ -1,17 +1,22 @@
 use super::data_handler;
-use crate::models::ModuleComm;
-use crate::utils::constants;
-use crate::utils::logger;
+use crate::{
+	models::ModuleComm,
+	utils::{constants, logger},
+};
 
-use async_std::fs::remove_file;
-use async_std::io::Result;
-use async_std::os::unix::net::{UnixListener, UnixStream};
-use async_std::path::Path;
-use async_std::prelude::StreamExt;
-use async_std::task;
+use async_std::{
+	fs::remove_file,
+	io::Result,
+	os::unix::net::{UnixListener, UnixStream},
+	path::Path,
+	prelude::StreamExt,
+	task,
+};
 
-use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
-use futures::future;
+use futures::{
+	channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
+	future,
+};
 
 use rand::{thread_rng, Rng};
 

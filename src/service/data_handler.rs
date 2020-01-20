@@ -1,14 +1,15 @@
-use crate::models::module;
-use crate::models::Module;
-use crate::models::ModuleComm;
-use crate::utils::constants::errors;
-use crate::utils::constants::gotham_hooks;
-use crate::utils::constants::request_keys;
-use crate::utils::constants::request_types;
-use crate::utils::logger;
+use crate::{
+	models::{module, Module, ModuleComm},
+	utils::{
+		constants::{errors, gotham_hooks, request_keys, request_types},
+		logger,
+	},
+};
 
-use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+	collections::HashMap,
+	time::{SystemTime, UNIX_EPOCH},
+};
 
 use async_std::sync::Mutex;
 

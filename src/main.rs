@@ -12,14 +12,15 @@ mod models;
 mod service;
 mod utils;
 
-use async_std::path::Path;
-use async_std::task;
+use async_std::{path::Path, task};
 
 use clap::{App, Arg};
 
 use service::socket_server;
-use utils::constants;
-use utils::logger::{self, LogLevel};
+use utils::{
+	constants,
+	logger::{self, LogLevel},
+};
 
 fn main() {
 	let args = App::new(constants::APP_NAME)
