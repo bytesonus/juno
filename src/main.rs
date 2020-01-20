@@ -21,7 +21,6 @@ use service::socket_server;
 use utils::constants;
 use utils::logger::{self, LogLevel};
 
-// TODO logging
 fn main() {
 	let args = App::new(constants::APP_NAME)
 		.version(constants::APP_VERSION)

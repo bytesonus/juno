@@ -264,6 +264,7 @@ async fn handle_function_call(module_comm: &ModuleComm, request_id: &str, reques
 	let module_id = get_module_id_for_uuid(&module_comm.get_uuid()).await;
 
 	if let None = module_id {
+		logger::debug("moduleId not found. Sending error...");
 		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
 		return;
 	}
@@ -271,6 +272,7 @@ async fn handle_function_call(module_comm: &ModuleComm, request_id: &str, reques
 
 	// Check if module is registered
 	if !REGISTERED_MODULES.lock().await.contains_key(&module_id) {
+		logger::debug("This module is not registered. Sending error...");
 		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
 		return;
 	}
@@ -278,26 +280,43 @@ async fn handle_function_call(module_comm: &ModuleComm, request_id: &str, reques
 	let function = request[request_keys::FUNCTION].as_str();
 
 	if function == None {
+		logger::debug("Function is not parsable as a string. Sending error...");
 		send_error(module_comm, request_id, errors::MALFORMED_REQUEST).await;
 		return;
 	}
 	let function = function.unwrap();
+	logger::verbose(&format!("Got request to call function '{}'", function));
 	let function_name = is_function_name(function);
 
 	if let None = function_name {
+		logger::debug(
+			"Function is not of the format 'module-name.function_name'. Sending error...",
+		);
 		send_error(module_comm, request_id, errors::UNKNOWN_FUNCTION).await;
 		return;
 	}
 	let (module_name, function_name) = function_name.unwrap();
+	logger::info(&format!(
+		"Calling function '{}' in module '{}'",
+		function_name, module_name
+	));
 
 	let registered_modules = REGISTERED_MODULES.lock().await;
 	if !registered_modules.contains_key(&module_name) {
+		logger::debug(&format!(
+			"The module '{}' is not registered. Sending error...",
+			module_name
+		));
 		send_error(module_comm, request_id, errors::UNKNOWN_MODULE).await;
 		return;
 	}
 
 	let receiver_module = registered_modules.get(&module_name).unwrap();
 	if !receiver_module.is_function_declared(&function_name) {
+		logger::debug(&format!(
+			"The function '{}' is not declared. Sending error...",
+			function_name
+		));
 		send_error(module_comm, request_id, errors::UNKNOWN_FUNCTION).await;
 		return;
 	}
@@ -309,28 +328,39 @@ async fn handle_function_call(module_comm: &ModuleComm, request_id: &str, reques
 			// There's already a requestId that's supposed to return to
 			// a different module. Let the module know that it's invalid
 			// so that we can prevent response-hijacking.
+			logger::error(&format!("The call to function '{}' had a requestId '{}', which is already declared. In order to prevent request hijacking, this request will be errored. Sending error...", function, request_id));
 			send_error(module_comm, request_id, errors::INVALID_REQUEST_ID).await;
 			return;
+		} else {
+			logger::debug(&format!("There already seems to be a request to module '{}' with the requestId '{}'. This may or may not be intended. Are you sending the same request twice?", module_name, request_id));
 		}
 	} else {
+		logger::verbose("Registering the requestId along with it's origin module.");
 		request_origins.insert(request_id_heap, module_id);
 	}
 	drop(request_origins);
 
 	let mut response = request.clone();
+	logger::verbose("Cloning request to send as response");
 	if request[request_keys::ARGUMENTS].as_object() == None {
+		logger::debug("The call to function had no arguments (or the arguments were not an object). A new, empty object will be assigned");
 		response[request_keys::ARGUMENTS] = Value::Object(Map::new());
 	}
 
+	logger::verbose("Changing the value of function from 'module-name.function_name' to just 'function_name' in the request");
 	response[request_keys::FUNCTION] = Value::String(function_name);
 
+	logger::verbose("Proxying the request to the relevant module...");
 	send_module(receiver_module, &response).await;
+	logger::verbose("Function call proxied.");
 }
 
 async fn handle_function_response(module_comm: &ModuleComm, request_id: &str, request: &Value) {
 	let module_id = get_module_id_for_uuid(&module_comm.get_uuid()).await;
+	let request_id = &String::from(request_id);
 
 	if let None = module_id {
+		logger::debug("moduleId not found. Sending error...");
 		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
 		return;
 	}
@@ -339,27 +369,37 @@ async fn handle_function_response(module_comm: &ModuleComm, request_id: &str, re
 	// Check if module is registered
 	let registered_modules = REGISTERED_MODULES.lock().await;
 	if !registered_modules.contains_key(&module_id) {
+		logger::debug(&format!(
+			"The module '{}' is not registered. Sending error...",
+			module_id
+		));
 		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
 		return;
 	}
 
-	let request_origins = REQUEST_ORIGINS.lock().await;
+	let mut request_origins = REQUEST_ORIGINS.lock().await;
 
 	if !request_origins.contains_key(request_id) {
 		// If the given requestId does not contain an origin,
 		// drop the packet entirely
+		logger::error(&format!("The function response with requestId '{}' does not contain an origin. The response might be malformed. Please ensure the function response has the same requestId as the function call", request_id));
+		send_error(module_comm, request_id, errors::MALFORMED_REQUEST).await;
 		return;
 	}
 
-	let origin_module_id = request_origins.get(&String::from(request_id)).unwrap();
+	// This requestId has completed its round-trip. Remove it from request_origins so that we can add the same one later on
+	let origin_module_id = request_origins.remove(request_id).unwrap();
 
-	if !registered_modules.contains_key(origin_module_id) {
+	if !registered_modules.contains_key(&origin_module_id) {
 		// The origin module has probably disconnected.
 		// Drop the packet entirely
+		logger::debug(&format!("The function response meant for module '{}' is not registered (is the module still connected?). This packet will be ignored.", origin_module_id));
 		return;
 	}
 
-	send_module(registered_modules.get(origin_module_id).unwrap(), request).await;
+	logger::verbose("Sending back response to origin module...");
+	send_module(registered_modules.get(&origin_module_id).unwrap(), request).await;
+	logger::verbose("Function response to origin module successfully sent.");
 }
 
 async fn handle_register_hook(module_comm: &ModuleComm, request_id: &str, request: &Value) {
@@ -367,6 +407,7 @@ async fn handle_register_hook(module_comm: &ModuleComm, request_id: &str, reques
 	let module_id = get_module_id_for_uuid(&module_comm.get_uuid()).await;
 
 	if let None = module_id {
+		logger::debug("moduleId not found. Sending error...");
 		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
 		return;
 	}
@@ -376,6 +417,7 @@ async fn handle_register_hook(module_comm: &ModuleComm, request_id: &str, reques
 
 	let module = registered_modules.get_mut(&module_id);
 	if let None = module {
+		logger::debug("This module is not registered. Sending error...");
 		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
 		return;
 	}
@@ -383,15 +425,20 @@ async fn handle_register_hook(module_comm: &ModuleComm, request_id: &str, reques
 
 	let hook = request[request_keys::HOOK].as_str();
 	if hook == None {
+		logger::debug("Hook is not parsable as a string. Sending error...");
 		send_error(module_comm, request_id, errors::MALFORMED_REQUEST).await;
 		return;
 	}
 	let hook = String::from(hook.unwrap());
 
 	if !module.is_hook_registered(&hook) {
+		logger::verbose(&format!("The hook '{}' is not registered. Registering hook...", hook));
 		module.register_hook(hook);
+	} else {
+		logger::debug(&format!("The hook '{}' is already registered. No need to register again.", hook));
 	}
 
+	logger::verbose("Hook registered. Sending success response to module...");
 	send_module(
 		module,
 		&json!(
@@ -401,6 +448,7 @@ async fn handle_register_hook(module_comm: &ModuleComm, request_id: &str, reques
 		}),
 	)
 	.await;
+	logger::info("Hook registration done, and success response has been sent");
 }
 
 async fn handle_trigger_hook(module_comm: &ModuleComm, request_id: &str, request: &Value) {
@@ -408,15 +456,17 @@ async fn handle_trigger_hook(module_comm: &ModuleComm, request_id: &str, request
 	let module_id = get_module_id_for_uuid(&module_comm.get_uuid()).await;
 
 	if let None = module_id {
+		logger::debug("moduleId not found. Sending error...");
 		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
 		return;
 	}
 	let module_id = module_id.unwrap();
 
-	let mut registered_modules = REGISTERED_MODULES.lock().await;
+	let registered_modules = REGISTERED_MODULES.lock().await;
 
-	let module = registered_modules.get_mut(&module_id);
+	let module = registered_modules.get(&module_id);
 	if let None = module {
+		logger::debug("This module is not registered. Sending error...");
 		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
 		return;
 	}
@@ -424,6 +474,7 @@ async fn handle_trigger_hook(module_comm: &ModuleComm, request_id: &str, request
 
 	let hook = request[request_keys::HOOK].as_str();
 	if hook == None {
+		logger::debug("Hook is not parsable as a string. Sending error...");
 		send_error(module_comm, request_id, errors::MALFORMED_REQUEST).await;
 		return;
 	}
@@ -431,13 +482,17 @@ async fn handle_trigger_hook(module_comm: &ModuleComm, request_id: &str, request
 
 	let data = request[request_keys::DATA].as_object();
 	let data = if data == None {
+		logger::debug("The triggered hook had no arguments (or the arguments were not an object). A new, empty object will be assigned");
 		Map::new()
 	} else {
+		logger::verbose("The hook data will be cloned to send to modules");
 		data.unwrap().clone()
 	};
 
+	logger::verbose(&format!("Triggering hook '{}' on all modules...", hook));
 	trigger_hook(&module, &hook, &data, false, false).await;
 
+	logger::verbose("Hook triggered on all modules. Informing origin module of successful hook trigger...");
 	send_module(
 		module,
 		&json!(
@@ -447,6 +502,7 @@ async fn handle_trigger_hook(module_comm: &ModuleComm, request_id: &str, request
 		}),
 	)
 	.await;
+	logger::verbose("Origin module has been notified of hook triggered");
 }
 
 pub async fn on_module_disconnected(module_comm: &ModuleComm) {
@@ -557,7 +613,6 @@ async fn trigger_hook(
 
 	if sticky {
 		logger::info("This hook is being stickied. Saving it for future modules...");
-		// TODO sticky this hook somewhere so that new modules can get it
 		logger::warn("TODO stickying hooks is not implemented yet");
 	} else {
 		logger::verbose("This hook is not being stickied.");
