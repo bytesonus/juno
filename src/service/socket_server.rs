@@ -1,69 +1,63 @@
-use super::data_handler;
-use crate::{
-	models::ModuleComm,
-	utils::{constants, logger},
-};
+use crate::{models::ModuleComm, service::data_handler, utils::logger};
 
 use async_std::{
 	fs::remove_file,
 	io::Result,
 	os::unix::net::{UnixListener, UnixStream},
 	path::Path,
-	prelude::StreamExt,
+	prelude::*,
+	sync::Mutex,
 	task,
 };
 
 use futures::{
-	channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
-	future,
+	channel::mpsc::{unbounded, UnboundedSender},
+	future::{self, Either},
 };
+use futures_util::sink::SinkExt;
 
 use rand::{thread_rng, Rng};
 
-use file_lock::FileLock;
-
 lazy_static! {
-	static ref CLOSE_HANDLERS: (UnboundedSender<bool>, UnboundedReceiver<bool>) =
-		unbounded::<bool>();
+	static ref CLOSE_LISTENER: Mutex<Option<UnboundedSender<()>>> = Mutex::new(None);
 }
 
-pub async fn listen(socket_path: &Path) -> Result<()> {
-	// Try to aquire a lock on the lock file first.
-	let mut lock_file_path = socket_path.to_str().unwrap().to_owned();
-	lock_file_path.push_str(".lock");
-
-	logger::verbose("Attempting to aquire lock file");
-	let _file_lock = match FileLock::lock(&lock_file_path, false, true) {
-		Ok(lock) => lock,
-		// If lock fails, return an error
-		Err(_) => {
-			logger::error(&format!(
-				"Unable to aquire socket file lock. Are there any other instances of {} running?",
-				constants::APP_NAME
-			));
-			panic!("Exiting...");
-		}
-	};
-	logger::verbose("Lock file aquired");
-
+pub async fn listen(socket_path: &str) -> Result<()> {
+	let socket_path = Path::new(socket_path);
 	// File lock is aquired. If the unix socket exists, then it's clearly a dangling socket. Feel free to delete it
 	if socket_path.exists().await {
 		logger::verbose("Removing existing unix socket");
 		remove_file(socket_path).await?;
 	}
 
+	let (sender, mut receiver) = unbounded::<()>();
+	CLOSE_LISTENER.lock().await.replace(sender);
+	let mut close_future = receiver.next();
+
 	let socket_server = UnixListener::bind(socket_path).await?;
 	let mut incoming = socket_server.incoming();
 
 	logger::verbose("Listening for socket connections...");
-	while let Some(stream) = incoming.next().await {
+	while let Either::Left((Some(stream), next_close_future)) =
+		future::select(incoming.next(), close_future).await
+	{
+		close_future = next_close_future;
 		logger::info("Socket connected");
 		task::spawn(async {
 			handle_client(stream).await;
 		});
 	}
 
+	logger::verbose("Socket server is closed.");
+
 	Ok(())
+}
+
+pub async fn on_exit() {
+	let close_sender = CLOSE_LISTENER.lock().await.take();
+	if let Some(mut sender) = close_sender {
+		sender.send(()).await.unwrap();
+	}
 }
 
 async fn handle_client(stream: Result<UnixStream>) {

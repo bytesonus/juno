@@ -3,11 +3,7 @@ use crate::{service::data_handler, utils::logger};
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::sink::SinkExt;
 
-use async_std::{
-	io::BufReader,
-	os::unix::net::UnixStream,
-	prelude::{StreamExt, *},
-};
+use async_std::{io::BufReader, os::unix::net::UnixStream, prelude::*};
 
 #[allow(dead_code)]
 pub struct ModuleComm {

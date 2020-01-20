@@ -12,11 +12,12 @@ mod models;
 mod service;
 mod utils;
 
-use async_std::{path::Path, task};
+use std::env::current_dir;
+
+use async_std::task;
 
 use clap::{App, Arg};
 
-use service::socket_server;
 use utils::{
 	constants,
 	logger::{self, LogLevel},
@@ -33,7 +34,6 @@ fn main() {
 				.long("socket-location")
 				.takes_value(true)
 				.value_name("FILE")
-				.default_value(constants::DEFAULT_SOCKET_LOCATION)
 				.help("Sets the location of the socket to be created"),
 		)
 		.arg(
@@ -48,7 +48,6 @@ fn main() {
 				.long("modules-location")
 				.takes_value(true)
 				.value_name("DIR")
-				.default_value(constants::DEFAULT_MODULES_LOCATION)
 				.help("Sets the location of the modules to run"),
 		)
 		.arg(
@@ -64,9 +63,23 @@ fn main() {
 		return;
 	}
 
-	let socket_location = args
-		.value_of("socket-location")
-		.unwrap_or(constants::DEFAULT_SOCKET_LOCATION);
+	let mut default_socket_location = current_dir().unwrap();
+	default_socket_location.push(constants::DEFAULT_SOCKET_LOCATION);
+	let default_socket_location = default_socket_location.as_os_str().to_str().unwrap();
+
+	let mut default_modules_location = current_dir().unwrap();
+	default_modules_location.push(constants::DEFAULT_MODULES_LOCATION);
+	let default_modules_location = default_modules_location.as_os_str().to_str().unwrap();
+
+	let socket_location = String::from(
+		args.value_of("socket-location")
+			.unwrap_or(default_socket_location),
+	);
+
+	let modules_location = String::from(
+		args.value_of("modules-location")
+			.unwrap_or(default_modules_location),
+	);
 
 	let verbosity = match args.occurrences_of("V") {
 		0 => LogLevel::Warn,
@@ -77,21 +90,22 @@ fn main() {
 	logger::set_verbosity(verbosity);
 
 	logger::info(&format!(
-		"Starting {} with socket location {}",
+		"Starting {} with socket location {} and modules location {}",
 		constants::APP_NAME,
-		socket_location
+		socket_location,
+		modules_location,
 	));
 
-	// ctrlc::set_handler(move || task::block_on(on_exit())).expect("Unable to set Ctrl-C handler");
+	ctrlc::set_handler(move || task::block_on(on_exit())).expect("Unable to set Ctrl-C handler");
 
-	let socket_task = socket_server::listen(Path::new(socket_location));
+	let socket_task = service::start(&socket_location, &modules_location);
 
 	if let Err(err) = task::block_on(socket_task) {
 		logger::error(&format!("Error creating socket: {}", err));
 	}
 }
 
-#[allow(dead_code)]
 async fn on_exit() {
-	();
+	logger::warn("Recieved exit code. Initiating shutdown process");
+	service::on_exit().await;
 }
