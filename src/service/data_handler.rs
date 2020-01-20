@@ -432,10 +432,16 @@ async fn handle_register_hook(module_comm: &ModuleComm, request_id: &str, reques
 	let hook = String::from(hook.unwrap());
 
 	if !module.is_hook_registered(&hook) {
-		logger::verbose(&format!("The hook '{}' is not registered. Registering hook...", hook));
+		logger::verbose(&format!(
+			"The hook '{}' is not registered. Registering hook...",
+			hook
+		));
 		module.register_hook(hook);
 	} else {
-		logger::debug(&format!("The hook '{}' is already registered. No need to register again.", hook));
+		logger::debug(&format!(
+			"The hook '{}' is already registered. No need to register again.",
+			hook
+		));
 	}
 
 	logger::verbose("Hook registered. Sending success response to module...");
@@ -492,7 +498,9 @@ async fn handle_trigger_hook(module_comm: &ModuleComm, request_id: &str, request
 	logger::verbose(&format!("Triggering hook '{}' on all modules...", hook));
 	trigger_hook(&module, &hook, &data, false, false).await;
 
-	logger::verbose("Hook triggered on all modules. Informing origin module of successful hook trigger...");
+	logger::verbose(
+		"Hook triggered on all modules. Informing origin module of successful hook trigger...",
+	);
 	send_module(
 		module,
 		&json!(
