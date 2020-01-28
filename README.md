@@ -9,7 +9,7 @@ __Q:__ Where would I use it?
 __A:__ Well, as the name says, its primary function is to be used as a microservices framework. That being said, it's light enough to be used for IoT systems as well (consumes approx 200 KB RAM while running, with roughly 80-100 KB per connected module). IoT modules can expose APIs and call them from other modules. Any form of communication between modules can use this.  
 
 __Q:__ Show me the code already!  
-__A:__ Yeah, no. There's no code. The entire framework communicates using sockets. If you're looking for the format of communication, you can find it [here](./docs/communication-protocol)
+__A:__ Yeah, no. There's no code. The entire framework communicates using sockets. If you're looking for the format of communication, you can find it [here](./docs/communication-protocol.md)
 
 __Q:__ Why would I replace my VM / Docker / Kubernetes with this?  
 __A:__ You don't. You run this inside your orchestration service.
