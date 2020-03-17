@@ -125,7 +125,7 @@ impl Module {
 	pub async fn send(&self, data: String) {
 		let sender = &self.module_sender;
 
-		if let None = sender {
+		if sender.is_none() {
 			return;
 		}
 
@@ -139,7 +139,7 @@ impl Module {
 	pub async fn close_sender(&self) {
 		let sender = &self.module_sender;
 
-		if let None = sender {
+		if sender.is_none() {
 			return;
 		}
 

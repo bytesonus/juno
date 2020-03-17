@@ -85,7 +85,7 @@ fn main() {
 		0 => LogLevel::Warn,
 		1 => LogLevel::Debug,
 		2 => LogLevel::Info,
-		3 | _ => LogLevel::Verbose,
+		_ => LogLevel::Verbose,
 	};
 	logger::set_verbosity(verbosity);
 

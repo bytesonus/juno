@@ -61,7 +61,7 @@ pub async fn on_exit() {
 }
 
 async fn handle_client(stream: Result<UnixStream>) {
-	if let Err(_) = stream {
+	if stream.is_err() {
 		logger::error("Error occured while opening socket");
 		return;
 	}

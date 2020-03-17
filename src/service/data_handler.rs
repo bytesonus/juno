@@ -28,7 +28,7 @@ pub async fn handle_request(module_comm: &ModuleComm, data: String) {
 	let json_result = serde_json::from_str(&data);
 	logger::verbose("Got request. Processing...");
 
-	if let Err(_) = json_result {
+	if json_result.is_err() {
 		logger::warn("Request is not parsable. Ignoring...");
 		return;
 	}
@@ -121,7 +121,7 @@ async fn handle_module_registration(module_comm: &ModuleComm, request_id: &str, 
 			}
 			let dependency_requirement =
 				VersionReq::parse(dependencies[dependency].as_str().unwrap());
-			if let Err(_) = dependency_requirement {
+			if dependency_requirement.is_err() {
 				logger::debug(&format!("Dependency value for key {} is not a valid SemVer version requirement. Sending error...", dependency));
 				send_error(module_comm, request_id, errors::MALFORMED_REQUEST).await;
 				return;
@@ -137,7 +137,7 @@ async fn handle_module_registration(module_comm: &ModuleComm, request_id: &str, 
 	}
 
 	let version = Version::parse(version);
-	if let Err(_) = version {
+	if version.is_err() {
 		logger::debug("version not valid. Sending error...");
 		send_error(module_comm, request_id, errors::MALFORMED_REQUEST).await;
 		return;
@@ -145,7 +145,7 @@ async fn handle_module_registration(module_comm: &ModuleComm, request_id: &str, 
 	let version = version.unwrap();
 
 	let mut module = Module::new(
-		module_comm.get_uuid().clone(),
+		*module_comm.get_uuid(),
 		String::from(module_id),
 		version,
 		module_comm.clone_sender(),
@@ -183,7 +183,7 @@ async fn handle_module_registration(module_comm: &ModuleComm, request_id: &str, 
 	.await;
 	logger::verbose("Notification successful");
 
-	if module.get_dependencies().len() == 0 {
+	if module.get_dependencies().is_empty() {
 		module.set_registered(true);
 
 		logger::verbose("Triggering activation hook...");
@@ -216,7 +216,7 @@ async fn handle_module_registration(module_comm: &ModuleComm, request_id: &str, 
 async fn handle_declare_function(module_comm: &ModuleComm, request_id: &str, request: &Value) {
 	let module_id = get_module_id_for_uuid(&module_comm.get_uuid()).await;
 
-	if let None = module_id {
+	if module_id.is_none() {
 		logger::debug("moduleId not found. Sending error...");
 		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
 		return;
@@ -234,7 +234,7 @@ async fn handle_declare_function(module_comm: &ModuleComm, request_id: &str, req
 
 	let module = registered_modules.get_mut(&module_id).unwrap();
 	let function = request[request_keys::FUNCTION].as_str();
-	if let None = function {
+	if function.is_none() {
 		logger::debug("Function is not parsable as a string. Sending error...");
 		send_error(module_comm, request_id, errors::MALFORMED_REQUEST).await;
 		return;
@@ -264,7 +264,7 @@ async fn handle_declare_function(module_comm: &ModuleComm, request_id: &str, req
 async fn handle_function_call(module_comm: &ModuleComm, request_id: &str, request: &Value) {
 	let module_id = get_module_id_for_uuid(&module_comm.get_uuid()).await;
 
-	if let None = module_id {
+	if module_id.is_none() {
 		logger::debug("moduleId not found. Sending error...");
 		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
 		return;
@@ -289,7 +289,7 @@ async fn handle_function_call(module_comm: &ModuleComm, request_id: &str, reques
 	logger::verbose(&format!("Got request to call function '{}'", function));
 	let function_name = is_function_name(function);
 
-	if let None = function_name {
+	if function_name.is_none() {
 		logger::debug(
 			"Function is not of the format 'module-name.function_name'. Sending error...",
 		);
@@ -360,7 +360,7 @@ async fn handle_function_response(module_comm: &ModuleComm, request_id: &str, re
 	let module_id = get_module_id_for_uuid(&module_comm.get_uuid()).await;
 	let request_id = &String::from(request_id);
 
-	if let None = module_id {
+	if module_id.is_none() {
 		logger::debug("moduleId not found. Sending error...");
 		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
 		return;
@@ -407,7 +407,7 @@ async fn handle_register_hook(module_comm: &ModuleComm, request_id: &str, reques
 	// The module who is calling this function wants to listen for a hook
 	let module_id = get_module_id_for_uuid(&module_comm.get_uuid()).await;
 
-	if let None = module_id {
+	if module_id.is_none() {
 		logger::debug("moduleId not found. Sending error...");
 		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
 		return;
@@ -417,7 +417,7 @@ async fn handle_register_hook(module_comm: &ModuleComm, request_id: &str, reques
 	let mut registered_modules = REGISTERED_MODULES.lock().await;
 
 	let module = registered_modules.get_mut(&module_id);
-	if let None = module {
+	if module.is_none() {
 		logger::debug("This module is not registered. Sending error...");
 		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
 		return;
@@ -462,7 +462,7 @@ async fn handle_trigger_hook(module_comm: &ModuleComm, request_id: &str, request
 	// The module who is calling this function is triggering a hook
 	let module_id = get_module_id_for_uuid(&module_comm.get_uuid()).await;
 
-	if let None = module_id {
+	if module_id.is_none() {
 		logger::debug("moduleId not found. Sending error...");
 		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
 		return;
@@ -472,7 +472,7 @@ async fn handle_trigger_hook(module_comm: &ModuleComm, request_id: &str, request
 	let registered_modules = REGISTERED_MODULES.lock().await;
 
 	let module = registered_modules.get(&module_id);
-	if let None = module {
+	if module.is_none() {
 		logger::debug("This module is not registered. Sending error...");
 		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
 		return;
@@ -522,7 +522,7 @@ pub async fn on_module_disconnected(module_comm: &ModuleComm) {
 	// recheck dependencies
 	let module_id = get_module_id_for_uuid(&module_comm.get_uuid()).await;
 
-	if let None = module_id {
+	if module_id.is_none() {
 		logger::verbose("Module does not have a moduleId. No more processing required");
 		return;
 	}
@@ -833,11 +833,11 @@ async fn recalculate_all_module_dependencies() {
 }
 
 fn is_function_name(name: &str) -> Option<(String, String)> {
-	if !name.contains(".") {
+	if !name.contains('.') {
 		return None;
 	}
 
-	let parts: Vec<&str> = name.split(".").collect();
+	let parts: Vec<&str> = name.split('.').collect();
 
 	if parts.len() != 2 {
 		return None;
@@ -865,7 +865,7 @@ async fn get_module_id_for_uuid(module_uuid: &u128) -> Option<String> {
 }
 
 async fn generate_request_id() -> String {
-	String::from(format!("gotham{}", get_current_nanos()))
+	format!("gotham{}", get_current_nanos())
 }
 
 fn get_current_nanos() -> u128 {
