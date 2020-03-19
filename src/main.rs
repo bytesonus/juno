@@ -23,7 +23,8 @@ use utils::{
 	logger::{self, LogLevel},
 };
 
-fn main() {
+#[async_std::main]
+async fn main() {
 	let args = App::new(constants::APP_NAME)
 		.version(constants::APP_VERSION)
 		.author(constants::APP_AUTHORS)
@@ -98,9 +99,7 @@ fn main() {
 
 	ctrlc::set_handler(move || task::block_on(on_exit())).expect("Unable to set Ctrl-C handler");
 
-	let socket_task = service::start(&socket_location, &modules_location);
-
-	if let Err(err) = task::block_on(socket_task) {
+	if let Err(err) = service::start(&socket_location, &modules_location).await {
 		logger::error(&format!("Error creating socket: {}", err));
 	}
 }
