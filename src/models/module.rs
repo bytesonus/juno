@@ -1,4 +1,4 @@
-use crate::utils::constants;
+use crate::utils::{constants, logger};
 
 use std::collections::HashMap;
 
@@ -132,7 +132,7 @@ impl Module {
 		let mut sender = sender.as_ref().unwrap();
 		let result = sender.send(data).await;
 		if let Err(error) = result {
-			println!("Error queing data to module: {}", error);
+			logger::error(&format!("Error queing data to module: {}", error));
 		}
 	}
 
@@ -146,7 +146,7 @@ impl Module {
 		let mut sender = sender.as_ref().unwrap();
 		let result = sender.close().await;
 		if let Err(error) = result {
-			println!("Error closing module's sending queue: {}", error);
+			logger::error(&format!("Error closing module's sending queue: {}", error));
 			return;
 		}
 	}

@@ -39,7 +39,7 @@ impl ModuleComm {
 		let mut sender = &self.socket_sender;
 		let result = sender.send(data).await;
 		if let Err(error) = result {
-			println!("Error queing data to module: {}", error);
+			logger::error(&format!("Error queing data to module: {}", error));
 		}
 	}
 
@@ -47,7 +47,7 @@ impl ModuleComm {
 		let mut sender = &self.socket_sender;
 		let result = sender.close().await;
 		if let Err(error) = result {
-			println!("Error closing module's sending queue: {}", error);
+			logger::error(&format!("Error closing module's sending queue: {}", error));
 			return;
 		}
 	}
@@ -72,7 +72,7 @@ impl ModuleComm {
 
 		while let Some(data) = receiver.next().await {
 			if let Err(err) = socket.write_all(data.as_bytes()).await {
-				println!("Error while writing to socket: {}", err);
+				logger::error(&format!("Error while writing to socket: {}", err));
 			}
 		}
 	}
