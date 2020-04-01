@@ -6,7 +6,6 @@ pub struct ConsoleLogger {
 	verbosity: LogLevel,
 }
 
-#[allow(dead_code)]
 impl ConsoleLogger {
 	pub fn new(verbosity: LogLevel) -> Self {
 		ConsoleLogger { verbosity }

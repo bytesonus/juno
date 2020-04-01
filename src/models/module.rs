@@ -102,24 +102,24 @@ impl Module {
 	pub fn get_dependencies(&self) -> &HashMap<String, VersionReq> {
 		&self.dependencies
 	}
-	pub fn get_dependency(&mut self, module_id: &String) -> Option<&VersionReq> {
-		self.dependencies.get(module_id)
+	pub fn get_dependency(&mut self, module_id: &str) -> Option<&VersionReq> {
+		self.dependencies.get(&module_id.to_string())
 	}
 
 	// Exposing declared_functions
 	pub fn declare_function(&mut self, function_name: String) {
 		self.declared_functions.push(function_name);
 	}
-	pub fn is_function_declared(&self, function_name: &String) -> bool {
-		self.declared_functions.contains(function_name)
+	pub fn is_function_declared(&self, function_name: &str) -> bool {
+		self.declared_functions.contains(&function_name.to_string())
 	}
 
 	// Exposing registered_hooks
 	pub fn register_hook(&mut self, hook_name: String) {
 		self.registered_hooks.push(hook_name);
 	}
-	pub fn is_hook_registered(&self, hook_name: &String) -> bool {
-		self.registered_hooks.contains(hook_name)
+	pub fn is_hook_registered(&self, hook_name: &str) -> bool {
+		self.registered_hooks.contains(&hook_name.to_string())
 	}
 
 	pub async fn send(&self, data: String) {

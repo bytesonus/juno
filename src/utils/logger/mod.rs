@@ -3,7 +3,6 @@ pub mod console_logger;
 use console_logger::ConsoleLogger;
 use std::sync::Mutex;
 
-#[allow(dead_code)]
 #[derive(Clone, Copy)]
 pub enum LogLevel {
 	Verbose = 1,
@@ -66,7 +65,6 @@ pub fn debug(data: &str) {
 	DEFAULT_LOGGER.lock().unwrap().debug(data);
 }
 
-#[allow(dead_code)]
 pub fn warn(data: &str) {
 	DEFAULT_LOGGER.lock().unwrap().warn(data);
 }
@@ -75,7 +73,6 @@ pub fn error(data: &str) {
 	DEFAULT_LOGGER.lock().unwrap().error(data);
 }
 
-#[allow(dead_code)]
 pub fn set_verbosity(log_level: LogLevel) {
 	DEFAULT_LOGGER.lock().unwrap().set_verbosity(log_level);
 }
