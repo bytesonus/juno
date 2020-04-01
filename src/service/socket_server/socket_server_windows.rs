@@ -5,11 +5,8 @@ use crate::{
 };
 
 use async_std::{
-	fs::remove_file,
 	io::Result,
 	net::{TcpListener, TcpStream},
-	os::unix::net::{UnixListener, UnixStream},
-	path::Path,
 	prelude::*,
 	sync::Mutex,
 	task,
@@ -45,7 +42,7 @@ async fn listen_inet_socket(socket_port: &str) -> Result<()> {
 	let socket_server = TcpListener::bind(socket_port).await?;
 	let mut incoming = socket_server.incoming();
 
-	logger::verbose(format!(
+	logger::verbose(&format!(
 		"Listening for socket connections on port {}...",
 		socket_port
 	));
