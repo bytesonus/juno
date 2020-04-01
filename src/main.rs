@@ -108,7 +108,7 @@ async fn main() {
 			logger::error("Listening on unix sockets are not supported on windows");
 			return;
 		} else {
-			*connection_type = constants::communication_types::UNIX_SOCKET;
+			*connection_type = constants::communication_types::INET_SOCKET;
 		}
 	} else {
 		if args.value_of("port").is_some() {
