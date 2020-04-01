@@ -4,7 +4,7 @@ use async_std::{fs::remove_file, io::Result};
 
 use futures::future;
 
-use file_lock::FileLock;
+use fslock::LockFile;
 
 pub mod data_handler;
 pub mod module_runner;
@@ -16,16 +16,13 @@ pub async fn start(socket_path: &str, modules_path: &str) -> Result<()> {
 	lock_file_path.push_str(".lock");
 
 	logger::verbose("Attempting to aquire lock file");
-	let file_lock = match FileLock::lock(&lock_file_path, false, true) {
-		Ok(lock) => lock,
-		// If lock fails, return an error
-		Err(_) => {
-			logger::error(&format!(
-				"Unable to aquire socket file lock. Are there any other instances of {} running?",
-				constants::APP_NAME
-			));
-			panic!("Exiting...");
-		}
+	let mut file_lock = LockFile::open(&lock_file_path)?;
+	if !file_lock.try_lock()? {
+		logger::error(&format!(
+			"Unable to aquire socket file lock. Are there any other instances of {} running?",
+			constants::APP_NAME
+		));
+		panic!("Exiting...");
 	};
 	logger::verbose("Lock file aquired.");
 

@@ -4,9 +4,9 @@ extern crate async_std;
 extern crate clap;
 extern crate colored;
 extern crate ctrlc;
-extern crate file_lock;
 extern crate rand;
 extern crate semver;
+extern crate fslock;
 
 mod models;
 mod service;
