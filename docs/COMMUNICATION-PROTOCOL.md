@@ -4,7 +4,7 @@ These are documented in JSON format for ease of reading. As of now, gotham only 
 
 ## Error response
 
-```json
+```jsonc
 {
     "requestId": "module1-1234567890",
     "type": 0,
@@ -18,7 +18,7 @@ These are documented in JSON format for ease of reading. As of now, gotham only 
 
 ### Request
 
-```json
+```jsonc
 {
     "requestId": "module1-1234567890",
     "type": 1,
@@ -32,7 +32,7 @@ These are documented in JSON format for ease of reading. As of now, gotham only 
 
 ### Response
 
-```json
+```jsonc
 {
     "requestId": "module1-1234567890",
     "type": 2
@@ -45,7 +45,7 @@ These are documented in JSON format for ease of reading. As of now, gotham only 
 
 ### Request
 
-```json
+```jsonc
 {
     "requestId": "module1-1234567890",
     "type": 3,
@@ -64,7 +64,7 @@ These are documented in JSON format for ease of reading. As of now, gotham only 
 
 ### Response
 
-```json
+```jsonc
 {
     "requestId": "module1-1234567890",
     "type": 4,
@@ -78,7 +78,7 @@ These are documented in JSON format for ease of reading. As of now, gotham only 
 
 ### Request
 
-```json
+```jsonc
 {
     "requestId": "module1-1234567890",
     "type": 5,
@@ -88,7 +88,7 @@ These are documented in JSON format for ease of reading. As of now, gotham only 
 
 ### Response
 
-```json
+```jsonc
 {
     "requestId": "module1-1234567890",
     "type": 6
@@ -101,7 +101,7 @@ These are documented in JSON format for ease of reading. As of now, gotham only 
 
 ### Request
 
-```json
+```jsonc
 {
     "requestId": "module1-1234567890",
     "type": 7,
@@ -114,7 +114,7 @@ These are documented in JSON format for ease of reading. As of now, gotham only 
 
 ### Response
 
-```json
+```jsonc
 {
     "requestId": "module1-1234567890",
     "type": 8
@@ -123,7 +123,7 @@ These are documented in JSON format for ease of reading. As of now, gotham only 
 
 ### Hook data sent on all listening modules
 
-```json
+```jsonc
 {
     "requestId": "unique-request-id",
     "type": 8,
@@ -140,7 +140,7 @@ These are documented in JSON format for ease of reading. As of now, gotham only 
 
 ### Request
 
-```json
+```jsonc
 {
     "requestId": "module1-1234567890",
     "type": 9,
@@ -150,7 +150,7 @@ These are documented in JSON format for ease of reading. As of now, gotham only 
 
 ### Response
 
-```json
+```jsonc
 {
     "requestId": "module1-1234567890",
     "type": 10
