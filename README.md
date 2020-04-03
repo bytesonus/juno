@@ -2,6 +2,17 @@
 
 ## A minimalistic, unopinionated, microservices framework
 
+If you're looking to understand the concepts of how this works, go [here](./docs/).
+
+As of now, there are official bindings to these supported languages:
+
+- Rust: [gotham-rust](https://github.com/bytesonus/gotham-rust)
+- NodeJS: [gotham-node](https://github.com/bytesonus/gotham-node)
+
+PRs to add support for more languages are welcome.
+
+## Not so FAQ, but questions nevertheless
+
 __Q:__ What is it?  
 __A:__ It's a framework that lets you connect modules to each other through a socket and expose generic API endpoints that can be reused. Modules can call each other's APIs along with parameters.
 
@@ -9,7 +20,7 @@ __Q:__ Where would I use it?
 __A:__ Well, as the name says, its primary function is to be used as a microservices framework. That being said, it's light enough to be used for IoT systems as well (consumes approx 200 KB RAM while running, with roughly 80-100 KB per connected module). IoT modules can expose APIs and call them from other modules. Any form of communication between modules can use this.  
 
 __Q:__ Show me the code already!  
-__A:__ Yeah, no. There's no code. The entire framework communicates using sockets. If you're looking for the format of communication, you can find it [here](./docs/communication-protocol.md)
+__A:__ Yeah, no. There's no code. The entire framework communicates using sockets. If you're looking for the format of communication, you can find it [here](./docs/)
 
 __Q:__ Why would I replace my VM / Docker / Kubernetes with this?  
 __A:__ You don't. You run this inside your orchestration service.

@@ -1,5 +1,3 @@
-extern crate clap;
-
 use clap::{crate_authors, crate_name, crate_version};
 
 pub const APP_NAME: &str = crate_name!();
