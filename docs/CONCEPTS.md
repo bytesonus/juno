@@ -39,4 +39,4 @@ A module can also choose to listen for a hook. The module will only recieve a ho
 
 However, some hooks are forced onto the module. For example, hooks from Gotham, such as `gotham.activated` and `gotham.deactivated` are always forced onto modules.
 
-You can find the protocol of communication [here](./COMMUNICATION-PROTOCOL).
+You can find the protocol of communication [here](./COMMUNICATION-PROTOCOL.md).
