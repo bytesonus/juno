@@ -58,8 +58,7 @@ async fn main() {
 				.long("bind-addr")
 				.takes_value(true)
 				.value_name("BIND-ADDR")
-				.help("Sets the binding address for the socket to listen to")
-				.default_value("127.0.0.1"),
+				.help("Sets the binding address for the socket to listen to"),
 		)
 		.arg(
 			Arg::with_name("V")
