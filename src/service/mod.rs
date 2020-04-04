@@ -9,7 +9,7 @@ pub mod socket_server;
 
 pub async fn start(socket_path: &str) -> Result<()> {
 	// Make sure no other instances of the application is running
-	if crate::get_connection_type() == constants::communication_types::UNIX_SOCKET {
+	if crate::get_connection_type() == constants::connection_types::UNIX_SOCKET {
 		let mut lock_file_path = socket_path.to_string();
 		lock_file_path.push_str(".lock");
 
@@ -39,7 +39,7 @@ pub async fn start(socket_path: &str) -> Result<()> {
 		logger::verbose("Socket file removed.");
 
 		socket_listener_result?;
-	} else if crate::get_connection_type() == constants::communication_types::INET_SOCKET {
+	} else if crate::get_connection_type() == constants::connection_types::INET_SOCKET {
 		let result = TcpListener::bind(socket_path).await;
 		if result.is_err() {
 			logger::error(&format!(

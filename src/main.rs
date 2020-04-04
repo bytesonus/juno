@@ -107,17 +107,17 @@ async fn main() {
 			logger::error("Listening on unix sockets are not supported on windows");
 			return;
 		} else {
-			*connection_type = constants::communication_types::INET_SOCKET;
+			*connection_type = constants::connection_types::INET_SOCKET;
 		}
 	} else {
 		if args.value_of("port").is_some() {
-			*connection_type = constants::communication_types::INET_SOCKET;
+			*connection_type = constants::connection_types::INET_SOCKET;
 		} else {
-			*connection_type = constants::communication_types::UNIX_SOCKET;
+			*connection_type = constants::connection_types::UNIX_SOCKET;
 		}
 	}
 
-	if *connection_type == constants::communication_types::UNIX_SOCKET {
+	if *connection_type == constants::connection_types::UNIX_SOCKET {
 		logger::info(&format!(
 			"Starting {} on socket location {}",
 			constants::APP_NAME,
@@ -130,7 +130,7 @@ async fn main() {
 		if let Err(err) = service::start(&socket_location).await {
 			logger::error(&format!("Error creating socket: {}", err));
 		}
-	} else if *connection_type == constants::communication_types::INET_SOCKET {
+	} else if *connection_type == constants::connection_types::INET_SOCKET {
 		logger::info(&format!(
 			"Starting {} on port {}",
 			constants::APP_NAME,

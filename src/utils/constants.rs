@@ -55,7 +55,7 @@ pub mod errors {
 	pub const DUPLICATE_MODULE: u32 = 7;
 }
 
-pub mod communication_types {
+pub mod connection_types {
 	pub const UNIX_SOCKET: u8 = 1;
 	pub const INET_SOCKET: u8 = 2;
 }

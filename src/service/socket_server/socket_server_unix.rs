@@ -28,9 +28,9 @@ lazy_static! {
 }
 
 pub async fn listen(socket_path: &str) -> Result<()> {
-	if crate::get_connection_type() == constants::communication_types::UNIX_SOCKET {
+	if crate::get_connection_type() == constants::connection_types::UNIX_SOCKET {
 		listen_unix_socket(socket_path).await
-	} else if crate::get_connection_type() == constants::communication_types::INET_SOCKET {
+	} else if crate::get_connection_type() == constants::connection_types::INET_SOCKET {
 		listen_inet_socket(socket_path).await
 	} else {
 		panic!("Any other connection type other than INet sockets and Unix Sockets are not implemented yet");
