@@ -1,4 +1,4 @@
-# Project Gotham
+# Project Juno
 
 ## A minimalistic, unopinionated, microservices framework
 
@@ -6,8 +6,8 @@ If you're looking to understand the concepts of how this works, go [here](./docs
 
 As of now, there are official bindings to these supported languages:
 
-- Rust: [gotham-rust](https://github.com/bytesonus/gotham-rust)
-- NodeJS: [gotham-node](https://github.com/bytesonus/gotham-node)
+- Rust: [juno-rust](https://github.com/bytesonus/juno-rust)
+- NodeJS: [juno-node](https://github.com/bytesonus/juno-node)
 
 PRs to add support for more languages are welcome.
 

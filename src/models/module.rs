@@ -8,7 +8,7 @@ use futures_util::sink::SinkExt;
 use semver::{Version, VersionReq};
 
 lazy_static! {
-	pub static ref GOTHAM_MODULE: Module = Module::internal(
+	pub static ref JUNO_MODULE: Module = Module::internal(
 		0,
 		String::from(constants::APP_NAME),
 		Version::parse(constants::APP_VERSION).unwrap(),

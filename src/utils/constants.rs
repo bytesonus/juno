@@ -4,7 +4,7 @@ pub const APP_NAME: &str = crate_name!();
 pub const APP_VERSION: &str = crate_version!();
 pub const APP_AUTHORS: &str = crate_authors!();
 
-pub const DEFAULT_SOCKET_LOCATION: &str = "../gotham.sock";
+pub const DEFAULT_SOCKET_LOCATION: &str = "../juno.sock";
 
 pub mod request_keys {
 	pub const TYPE: &str = "type";
@@ -19,7 +19,7 @@ pub mod request_keys {
 	pub const DATA: &str = "data";
 }
 
-pub mod gotham_hooks {
+pub mod juno_hooks {
 	pub const ACTIVATED: &str = "activated";
 	pub const DEACTIVATED: &str = "deactivated";
 }

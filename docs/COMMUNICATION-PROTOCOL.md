@@ -1,6 +1,6 @@
 # Communication protocol
 
-These are documented in JSON format for ease of reading. As of now, gotham only supports JSON formats. We can, however, expand that to support MsgPack in the future, if throughput / encode-decode speed is an issue.
+These are documented in JSON format for ease of reading. As of now, juno only supports JSON formats. We can, however, expand that to support MsgPack in the future, if throughput / encode-decode speed is an issue.
 
 ## Error response
 

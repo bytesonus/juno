@@ -11,21 +11,21 @@
 
 ## The actual explaination
 
-Each module is something that connects with Gotham either through the Unix Socket or through the Inet Socket.
+Each module is something that connects with Juno either through the Unix Socket or through the Inet Socket.
 
-Once a module connects, it needs to register itself with gotham. This is done by sending a command to initialize itself with a `moduleId`, `version` and `dependencies`.
+Once a module connects, it needs to register itself with juno. This is done by sending a command to initialize itself with a `moduleId`, `version` and `dependencies`.
 
-Once gotham has recieved the registration command, and there are no issues, it will respond with a successful registration command, otherwise it will respond with an error code. The list of gotham error codes can be found [here](./ERROR-CODES.md).
+Once juno has recieved the registration command, and there are no issues, it will respond with a successful registration command, otherwise it will respond with an error code. The list of juno error codes can be found [here](./ERROR-CODES.md).
 
-Gotham will then check if dependencies are satisfied. If it is, it will send a `gotham.activated` hook.
+Juno will then check if dependencies are satisfied. If it is, it will send a `juno.activated` hook.
 
-Then, if one of the dependencies of your module disconnects, gotham will recognize that all your dependencies are not satisfied and will send a `gotham.deactivated` hook.
+Then, if one of the dependencies of your module disconnects, juno will recognize that all your dependencies are not satisfied and will send a `juno.deactivated` hook.
 
-Every request sent to gotham MUST be sent with a `requestId` and `type` key.  
+Every request sent to juno MUST be sent with a `requestId` and `type` key.  
 This request ID will be the identifier for which request a particular response is meant for. This `requestId` can be any unique string. However, to avoid collisions, it is recommended to use `<module-id>-<unix-timestamp>` as a format for the `requestId`.  
 The `type` is a number which mentions the type of request / response being sent.
 
-You can then declare functions to gotham, which can then be called by other modules.
+You can then declare functions to juno, which can then be called by other modules.
 
 For example: if a module called `module1` declares a function called `calculateSum`, another module (`module2`) can call that function by calling the function `module1.calculateSum`. However, when `module1` recieves the function-call request, the function name will be stripped down to just `calculateSum`.
 
@@ -37,6 +37,6 @@ A module can also choose to trigger a hook. A hook is like an event. Any module 
 
 A module can also choose to listen for a hook. The module will only recieve a hook if it is listening for a hook.
 
-However, some hooks are forced onto the module. For example, hooks from Gotham, such as `gotham.activated` and `gotham.deactivated` are always forced onto modules.
+However, some hooks are forced onto the module. For example, hooks from Juno, such as `juno.activated` and `juno.deactivated` are always forced onto modules.
 
 You can find the protocol of communication [here](./COMMUNICATION-PROTOCOL.md).

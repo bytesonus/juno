@@ -1,7 +1,7 @@
 use crate::{
 	models::{module, Module, ModuleComm},
 	utils::{
-		constants::{errors, gotham_hooks, request_keys, request_types},
+		constants::{errors, juno_hooks, request_keys, request_types},
 		logger,
 	},
 };
@@ -188,9 +188,9 @@ async fn handle_module_registration(module_comm: &ModuleComm, request_id: &str, 
 
 		logger::verbose("Triggering activation hook...");
 		trigger_hook_on(
-			&module::GOTHAM_MODULE,
+			&module::JUNO_MODULE,
 			&module,
-			gotham_hooks::ACTIVATED,
+			juno_hooks::ACTIVATED,
 			&Map::new(),
 			true,
 		)
@@ -745,9 +745,9 @@ async fn recalculate_all_module_dependencies() {
 
 		logger::verbose("Sending ACTIVATED trigger to module...");
 		trigger_hook_on(
-			&module::GOTHAM_MODULE,
+			&module::JUNO_MODULE,
 			&module,
-			gotham_hooks::ACTIVATED,
+			juno_hooks::ACTIVATED,
 			&Map::new(),
 			true,
 		)
@@ -814,9 +814,9 @@ async fn recalculate_all_module_dependencies() {
 
 		logger::verbose("Sending DEACTIVATED trigger to module...");
 		trigger_hook_on(
-			&module::GOTHAM_MODULE,
+			&module::JUNO_MODULE,
 			&module,
-			gotham_hooks::DEACTIVATED,
+			juno_hooks::DEACTIVATED,
 			&Map::new(),
 			true,
 		)
@@ -865,7 +865,7 @@ async fn get_module_id_for_uuid(module_uuid: &u128) -> Option<String> {
 }
 
 async fn generate_request_id() -> String {
-	format!("gotham{}", get_current_nanos())
+	format!("juno{}", get_current_nanos())
 }
 
 fn get_current_nanos() -> u128 {
