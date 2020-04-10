@@ -27,20 +27,20 @@ pub mod juno_hooks {
 pub mod request_types {
 	pub const ERROR: u64 = 0;
 
-	pub const MODULE_REGISTRATION: u64 = 1;
-	pub const MODULE_REGISTERED: u64 = 2;
+	pub const REGISTER_MODULE_REQUEST: u64 = 1;
+	pub const REGISTER_MODULE_RESPONSE: u64 = 2;
 
-	pub const FUNCTION_CALL: u64 = 3;
-	pub const FUNCTION_RESPONSE: u64 = 4;
+	pub const FUNCTION_CALL_REQUEST: u64 = 3;
+	pub const FUNCTION_CALL_RESPONSE: u64 = 4;
 
-	pub const REGISTER_HOOK: u64 = 5;
-	pub const HOOK_REGISTERED: u64 = 6;
+	pub const REGISTER_HOOK_REQUEST: u64 = 5;
+	pub const REGISTER_HOOK_RESPONSE: u64 = 6;
 
-	pub const TRIGGER_HOOK: u64 = 7;
-	pub const HOOK_TRIGGERED: u64 = 8;
+	pub const TRIGGER_HOOK_REQUEST: u64 = 7;
+	pub const TRIGGER_HOOK_RESPONSE: u64 = 8;
 
-	pub const DECLARE_FUNCTION: u64 = 9;
-	pub const FUNCTION_DECLARED: u64 = 10;
+	pub const DECLARE_FUNCTION_REQUEST: u64 = 9;
+	pub const DECLARE_FUNCTION_RESPONSE: u64 = 10;
 }
 
 pub mod errors {

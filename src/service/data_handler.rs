@@ -51,27 +51,27 @@ pub async fn handle_request(module_comm: &ModuleComm, data: String) {
 	let request_id = request_id.unwrap();
 
 	match r#type {
-		request_types::MODULE_REGISTRATION => {
+		request_types::REGISTER_MODULE_REQUEST => {
 			logger::verbose("Processing request as module registration...");
 			handle_module_registration(module_comm, request_id, &input).await;
 		}
-		request_types::DECLARE_FUNCTION => {
+		request_types::DECLARE_FUNCTION_REQUEST => {
 			logger::verbose("Processing request as declare function...");
 			handle_declare_function(module_comm, request_id, &input).await;
 		}
-		request_types::FUNCTION_CALL => {
+		request_types::FUNCTION_CALL_REQUEST => {
 			logger::verbose("Processing request as function call...");
 			handle_function_call(module_comm, request_id, &input).await;
 		}
-		request_types::FUNCTION_RESPONSE => {
+		request_types::FUNCTION_CALL_RESPONSE => {
 			logger::verbose("Processing request as function response...");
 			handle_function_response(module_comm, request_id, &input).await;
 		}
-		request_types::REGISTER_HOOK => {
+		request_types::REGISTER_HOOK_REQUEST => {
 			logger::verbose("Processing request as register hook...");
 			handle_register_hook(module_comm, request_id, &input).await;
 		}
-		request_types::TRIGGER_HOOK => {
+		request_types::TRIGGER_HOOK_REQUEST => {
 			logger::verbose("Processing request as trigger hook...");
 			handle_trigger_hook(module_comm, request_id, &input).await;
 		}
@@ -177,7 +177,7 @@ async fn handle_module_registration(module_comm: &ModuleComm, request_id: &str, 
 		&module,
 		&json!({
 			request_keys::REQUEST_ID: request_id,
-			request_keys::TYPE: request_types::MODULE_REGISTERED
+			request_keys::TYPE: request_types::REGISTER_MODULE_RESPONSE
 		}),
 	)
 	.await;
@@ -253,7 +253,7 @@ async fn handle_declare_function(module_comm: &ModuleComm, request_id: &str, req
 		&json!(
 		{
 			request_keys::REQUEST_ID: request_id,
-			request_keys::TYPE: request_types::FUNCTION_DECLARED,
+			request_keys::TYPE: request_types::DECLARE_FUNCTION_RESPONSE,
 			request_keys::FUNCTION: function
 		}),
 	)
@@ -451,7 +451,7 @@ async fn handle_register_hook(module_comm: &ModuleComm, request_id: &str, reques
 		&json!(
 		{
 			request_keys::REQUEST_ID: request_id,
-			request_keys::TYPE: request_types::HOOK_REGISTERED
+			request_keys::TYPE: request_types::REGISTER_HOOK_RESPONSE
 		}),
 	)
 	.await;
@@ -507,7 +507,7 @@ async fn handle_trigger_hook(module_comm: &ModuleComm, request_id: &str, request
 		&json!(
 		{
 			request_keys::REQUEST_ID: request_id,
-			request_keys::TYPE: request_types::HOOK_TRIGGERED
+			request_keys::TYPE: request_types::TRIGGER_HOOK_RESPONSE
 		}),
 	)
 	.await;
@@ -590,7 +590,7 @@ async fn trigger_hook(
 				registered_module,
 				&json!({
 					request_keys::REQUEST_ID: generate_request_id().await,
-					request_keys::TYPE: request_types::HOOK_TRIGGERED,
+					request_keys::TYPE: request_types::TRIGGER_HOOK_RESPONSE,
 					request_keys::HOOK: hook_name,
 					request_keys::DATA: data
 				}),
@@ -605,7 +605,7 @@ async fn trigger_hook(
 				registered_module,
 				&json!({
 					request_keys::REQUEST_ID: generate_request_id().await,
-					request_keys::TYPE: request_types::HOOK_TRIGGERED,
+					request_keys::TYPE: request_types::TRIGGER_HOOK_RESPONSE,
 					request_keys::HOOK: hook_name,
 					request_keys::DATA: data
 				}),
@@ -651,7 +651,7 @@ async fn trigger_hook_on(
 			to_module,
 			&json!({
 				request_keys::REQUEST_ID: generate_request_id().await,
-				request_keys::TYPE: request_types::HOOK_TRIGGERED,
+				request_keys::TYPE: request_types::TRIGGER_HOOK_RESPONSE,
 				request_keys::HOOK: hook_name,
 				request_keys::DATA: data
 			}),
@@ -663,7 +663,7 @@ async fn trigger_hook_on(
 			to_module,
 			&json!({
 				request_keys::REQUEST_ID: generate_request_id().await,
-				request_keys::TYPE: request_types::HOOK_TRIGGERED,
+				request_keys::TYPE: request_types::TRIGGER_HOOK_RESPONSE,
 				request_keys::HOOK: hook_name,
 				request_keys::DATA: data
 			}),
