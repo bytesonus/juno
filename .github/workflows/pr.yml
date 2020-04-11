@@ -1,0 +1,16 @@
+on:
+  pull_request:
+    branches:
+      - master
+name: New Release Version Check
+jobs:
+  version-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: git fetch --depth=1 origin +refs/tags/*:refs/tags/*
+      - name: Check Release Version
+        uses: thebongy/version-check@v1
+        with:
+          file: Cargo.toml
+        id: version_check
