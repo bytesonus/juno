@@ -1,0 +1,14 @@
+on: pull_request
+
+jobs:
+  version-check:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.head.ref == 'refs/head/master'
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Check Release Version
+        uses: thebongy/version-check@v1
+        with:
+          file: Cargo.toml
+        id: version_check
