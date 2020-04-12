@@ -4,17 +4,11 @@ on:
      - master
      - staging
      - develop
-  pull_request:
-    branches:
-      - master
-      - staging
-      - develop
 
 name: Continuous integration
 
 jobs:
   build:
-    if: github.event_name == 'push'
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -56,40 +50,29 @@ jobs:
           name: juno-${{matrix.os}}
           path: target/release/juno.exe
 
-      - name: Cargo test
-        if: github.action == 'pull_request'
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-
-      - name: Cargo fmt
-        if: github.action == 'pull_request'
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
-
-      - name: Cargo clippy
-        if: github.action == 'pull_request'
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: -- -D warnings
-
   release: # Publish release on push to master
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/master')
+    if: (github.ref == 'refs/heads/master') || (github.ref == 'refs/heads/staging')
     runs-on: ubuntu-latest
     needs: build
     steps:
       - uses: actions/checkout@v2
-      - run: git fetch --depth=1 origin +refs/tags/*:refs/tags/*
+      - run: git fetch --all --tags
 
-      - name: Check Release Version
+      - name: Check Release Version (staging)
+        if: github.ref == 'refs/heads/staging'
+        uses: thebongy/version-check@v1
+        with:
+          file: Cargo.toml
+          tagFormat: v${version}-beta
+        id: version_check_staging
+
+      - name: Check Release Version (master)
+        if: github.ref == 'refs/heads/master'
         uses: thebongy/version-check@v1
         with:
           file: Cargo.toml
           tagFormat: v${version}
-        id: version_check
+        id: version_check_master
       
       - name: Download Windows Artifact
         uses: actions/download-artifact@v1
@@ -115,10 +98,22 @@ jobs:
           mv release/macos/juno release/macos/juno-${{steps.version_check.outputs.releaseVersion}}-macos
           mv release/linux/juno release/linux/juno-${{steps.version_check.outputs.releaseVersion}}-linux
 
-      - name: Publish Release
+      - name: Publish Release (master)
+        if: github.ref == 'refs/heads/master'
         uses: softprops/action-gh-release@v1
         with:
           files: release/**/*
-          tag_name: v${{steps.version_check.outputs.releaseVersion}}
+          tag_name: v${{steps.version_check_master.outputs.releaseVersion}}
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish Release (staging)
+        if: github.ref == 'refs/heads/staging'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/**/*
+          tag_name: v${{steps.version_check_staging.outputs.releaseVersion}}
+          prerelease: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
