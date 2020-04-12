@@ -71,7 +71,7 @@ jobs:
       - name: Check Release Version
         uses: thebongy/version-check@v1
         with:
-          file: data.json
+          file: Cargo.toml
         id: version_check
       
       - name: Download Windows Artifact
