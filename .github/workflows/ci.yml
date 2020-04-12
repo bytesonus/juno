@@ -31,7 +31,7 @@ jobs:
           args: --release --all
       
       - name: Upload Artifact
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v2-preview
         if: matrix.rust == 'stable'
         with:
           name: juno-${{matrix.os}}
