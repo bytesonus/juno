@@ -3,6 +3,7 @@ name: Continuous integration
 
 jobs:
   build:
+    if: github.event_name == 'push'
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
