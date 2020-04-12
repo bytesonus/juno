@@ -4,6 +4,7 @@ on:
       - master
       - staging
       - develop
+      - test_branch
 name: New Release Version Check
 jobs:
   version-check:
