@@ -4,7 +4,7 @@ on:
       - master
       - staging
       - develop
-name: New Release Version Check
+name: Continuous integration (PR)
 jobs:
   version-check:
     if: github.base_ref == 'staging' || github.base_ref == 'master'
