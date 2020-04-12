@@ -61,3 +61,13 @@ jobs:
         with:
           command: clippy
           args: -- -D warnings
+
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/download-atrifact@v1
+        with:
+          name: juno-windows-latest
+      - run: |
+          ls
