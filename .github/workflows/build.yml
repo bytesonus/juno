@@ -1,4 +1,10 @@
-on: push
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
 
 name: Continuous integration
 
@@ -72,6 +78,7 @@ jobs:
         uses: thebongy/version-check@v1
         with:
           file: data.json
+        id: version_check
       
       - name: Download Windows Artifact
         uses: actions/download-artifact@v1
@@ -89,4 +96,16 @@ jobs:
         uses: actions/download-artifact@v1
         with:
           name: juno-ubuntu-latest
-          path: release   
+          path: release
+        
+      - name: Publish Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            release/juno-windows-latest/juno.exe
+            release/juno-macos-latest/juno
+            release/juno-ubuntu-latest/juno
+          tag_name: ${{steps.versuib}}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
