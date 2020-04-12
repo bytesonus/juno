@@ -15,4 +15,5 @@ jobs:
         uses: thebongy/version-check@v1
         with:
           file: Cargo.toml
+          tagFormat: v${version}
         id: version_check
