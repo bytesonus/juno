@@ -12,6 +12,7 @@ jobs:
           - stable
           - beta
           - nightly
+      fail-fast: false
 
     steps:
       - uses: actions/checkout@v2
