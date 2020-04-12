@@ -66,17 +66,27 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - uses: actions/download-artifact@v1
+      - uses: actions/checkout@v2
+
+      - name: Check Release Version
+        uses: thebongy/version-check
+        with:
+          file: data.json
+      
+      - name: Download Windows Artifact
+        uses: actions/download-artifact@v1
         with:
           name: juno-windows-latest
+          path: release
 
-      - uses: actions/download-artifact@v1
+      - name: Download MacOS Artifact
+        uses: actions/download-artifact@v1
         with:
           name: juno-macos-latest
+          path: release
 
-      - uses: actions/download-artifact@v1
+      - name: Download Linux Artifact
+        uses: actions/download-artifact@v1
         with:
           name: juno-ubuntu-latest
-
-      - run: |
-          ls
+          path: release   
