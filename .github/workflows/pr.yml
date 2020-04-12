@@ -10,8 +10,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+
       - run: git fetch --all --tags
-      - name: Check Release Version
+
+      - name: Check Release Version (staging)
+        if: github.base_ref == 'refs/heads/staging'
+        uses: thebongy/version-check@v1
+        with:
+          file: Cargo.toml
+          tagFormat: v${version}-beta
+        id: version_check
+      
+      - name: Check Release Version (master)
+        if: github.base_ref == 'refs/heads/master'
         uses: thebongy/version-check@v1
         with:
           file: Cargo.toml
