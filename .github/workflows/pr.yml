@@ -1,9 +1,11 @@
-on: pull_request
-
+on:
+  pull_request:
+    branches:
+      - master
+name: New Release Version Check
 jobs:
   version-check:
     runs-on: ubuntu-latest
-    if: github.event.pull_request.head.ref == 'refs/head/master'
     steps:
       - uses: actions/checkout@v2
 
