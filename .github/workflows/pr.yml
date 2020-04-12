@@ -7,7 +7,7 @@ on:
 name: New Release Version Check
 jobs:
   version-check:
-    if: github.base_ref == 'refs/heads/staging' or github.base_ref == 'refs/heags/master'
+    if: (github.base_ref == 'refs/heads/staging') || (github.base_ref == 'refs/heads/master')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
