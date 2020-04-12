@@ -100,6 +100,6 @@ jobs:
             release/juno-windows-latest/juno.exe
             release/juno-macos-latest/juno
             release/juno-ubuntu-latest/juno
-          tag_name: ${{steps.versuib}}
+          tag_name: ${{steps.version_check.outputs.releaseVersion}}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
