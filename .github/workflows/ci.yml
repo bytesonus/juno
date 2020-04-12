@@ -29,6 +29,18 @@ jobs:
         with:
           command: build
           args: --release --all
+      
+      - name: Debug
+        run: |
+          ls target/release
+      
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v1
+        if: matrix.rust == 'stable'
+        with:
+          name: juno-${{matrix.os}}
+          path: target/release/juno
+
 
       - name: Cargo test
         uses: actions-rs/cargo@v1
