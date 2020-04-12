@@ -1,4 +1,15 @@
-on: push
+on:
+  push:
+   branches:
+     - master
+     - staging
+     - develop
+  pull_request:
+    branches:
+      - master
+      - staging
+      - develop
+
 name: Continuous integration
 
 jobs:
@@ -47,6 +58,7 @@ jobs:
 
 
       - name: Cargo test
+        if: github.ac
         uses: actions-rs/cargo@v1
         with:
           command: test
@@ -105,6 +117,6 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: release/**/*
-          tag_name: ${{steps.version_check.outputs.releaseVersion}}
+          tag_name: v${{steps.version_check.outputs.releaseVersion}}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
