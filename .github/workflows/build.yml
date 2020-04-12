@@ -64,7 +64,7 @@ jobs:
         with:
           file: Cargo.toml
           tagFormat: v${version}-beta
-        id: version_check
+        id: version_check_staging
 
       - name: Check Release Version (master)
         if: github.ref == 'refs/heads/master'
@@ -72,7 +72,7 @@ jobs:
         with:
           file: Cargo.toml
           tagFormat: v${version}
-        id: version_check
+        id: version_check_master
       
       - name: Download Windows Artifact
         uses: actions/download-artifact@v1
@@ -103,7 +103,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: release/**/*
-          tag_name: v${{steps.version_check.outputs.releaseVersion}}
+          tag_name: v${{steps.version_check_master.outputs.releaseVersion}}
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -113,7 +113,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: release/**/*
-          tag_name: v${{steps.version_check.outputs.releaseVersion}}
+          tag_name: v${{steps.version_check_staging.outputs.releaseVersion}}
           prerelease: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

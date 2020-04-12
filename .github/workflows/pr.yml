@@ -19,7 +19,7 @@ jobs:
         with:
           file: Cargo.toml
           tagFormat: v${version}-beta
-        id: version_check
+        id: version_check_staging
       
       - name: Check Release Version (master)
         if: github.base_ref == 'refs/heads/master'
@@ -27,7 +27,7 @@ jobs:
         with:
           file: Cargo.toml
           tagFormat: v${version}
-        id: version_check
+        id: version_check_master
   build:
     runs-on: ${{ matrix.os }}
     strategy:
