@@ -35,7 +35,7 @@ jobs:
         if: matrix.rust == 'stable'
         with:
           name: juno-${{matrix.os}}
-          path: target/release/(juno|juno.exe)
+          path: target/release/juno(.exe)?
 
 
       - name: Cargo test
