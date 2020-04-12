@@ -7,13 +7,17 @@ on:
 name: New Release Version Check
 jobs:
   version-check:
-    if: (github.base_ref == 'refs/heads/staging') || (github.base_ref == 'refs/heads/master')
+    #if: (github.base_ref == 'refs/heads/staging') || (github.base_ref == 'refs/heads/master')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
 
       - run: git fetch --all --tags
-
+      - name: Step that prints name of pull request's base branch
+        run: |
+          echo "Pull request's base branch is: ${BASE_BRANCH}"
+        env:
+          BASE_BRANCH: ${{ github.base_ref }}
       - name: Check Release Version (staging)
         if: github.base_ref == 'refs/heads/staging'
         uses: thebongy/version-check@v1
