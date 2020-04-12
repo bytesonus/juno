@@ -31,11 +31,18 @@ jobs:
           args: --release --all
       
       - name: Upload Artifact
-        uses: actions/upload-artifact@v2-preview
-        if: matrix.rust == 'stable'
+        uses: actions/upload-artifact@v1
+        if: matrix.rust == 'stable' && matrix.os != 'windows-latest'
         with:
           name: juno-${{matrix.os}}
-          path: target/release/juno(.exe)?
+          path: target/release/juno
+      
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v1
+        if: matrix.rust == 'stable' && matrix.os == 'windows-latest'
+        with:
+          name: juno-${{matrix.os}}
+          path: target/release/juno.exe
 
 
       - name: Cargo test
