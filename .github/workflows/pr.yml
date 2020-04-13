@@ -71,20 +71,17 @@ jobs:
           path: target/release/juno.exe
 
       - name: Cargo test
-        if: github.action == 'pull_request'
         uses: actions-rs/cargo@v1
         with:
           command: test
 
       - name: Cargo fmt
-        if: github.action == 'pull_request'
         uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check
 
       - name: Cargo clippy
-        if: github.action == 'pull_request'
         uses: actions-rs/cargo@v1
         with:
           command: clippy
