@@ -1,0 +1,88 @@
+on:
+  pull_request:
+    branches:
+      - master
+      - staging
+      - develop
+name: Continuous integration (PR)
+jobs:
+  version-check:
+    if: github.base_ref == 'staging' || github.base_ref == 'master'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - run: git fetch --all --tags
+
+      - name: Check Release Version (staging)
+        if: github.base_ref == 'staging'
+        uses: thebongy/version-check@v1
+        with:
+          file: Cargo.toml
+          tagFormat: v${version}-beta
+        id: version_check_staging
+      
+      - name: Check Release Version (master)
+        if: github.base_ref == 'master'
+        uses: thebongy/version-check@v1
+        with:
+          file: Cargo.toml
+          tagFormat: v${version}
+        id: version_check_master
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+        rust:
+          - stable
+          - beta
+          - nightly
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+          components: rustfmt, clippy
+
+      - name: Cargo build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --all
+      
+      - name: Upload Artifact (Linux/MacOS)
+        uses: actions/upload-artifact@v1
+        if: matrix.rust == 'stable' && matrix.os != 'windows-latest'
+        with:
+          name: juno-${{matrix.os}}
+          path: target/release/juno
+      
+      - name: Upload Artifact (Windows)
+        uses: actions/upload-artifact@v1
+        if: matrix.rust == 'stable' && matrix.os == 'windows-latest'
+        with:
+          name: juno-${{matrix.os}}
+          path: target/release/juno.exe
+
+      - name: Cargo test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+
+      - name: Cargo fmt
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+
+      - name: Cargo clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: -- -D warnings

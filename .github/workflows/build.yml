@@ -1,0 +1,149 @@
+on:
+  push:
+   branches:
+     - master
+     - staging
+     - develop
+
+name: Continuous integration
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+        rust:
+          - stable
+          - beta
+          - nightly
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+          components: rustfmt, clippy
+
+      - name: Cargo build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --all
+      
+      - name: Upload Artifact (Linux/MacOS)
+        uses: actions/upload-artifact@v1
+        if: matrix.rust == 'stable' && matrix.os != 'windows-latest'
+        with:
+          name: juno-${{matrix.os}}
+          path: target/release/juno
+      
+      - name: Upload Artifact (Windows)
+        uses: actions/upload-artifact@v1
+        if: matrix.rust == 'stable' && matrix.os == 'windows-latest'
+        with:
+          name: juno-${{matrix.os}}
+          path: target/release/juno.exe
+
+  release-master: # Publish release on push to master
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v2
+      - run: git fetch --all --tags
+
+      - name: Check Release Version
+        uses: thebongy/version-check@v1
+        with:
+          file: Cargo.toml
+          tagFormat: v${version}
+        id: version_check
+      
+      - name: Download Windows Artifact
+        uses: actions/download-artifact@v1
+        with:
+          name: juno-windows-latest
+          path: release/windows
+
+      - name: Download MacOS Artifact
+        uses: actions/download-artifact@v1
+        with:
+          name: juno-macos-latest
+          path: release/macos
+
+      - name: Download Linux Artifact
+        uses: actions/download-artifact@v1
+        with:
+          name: juno-ubuntu-latest
+          path: release/linux
+      
+      - name: Rename Artifacts
+        run: |
+          mv release/windows/juno.exe release/windows/juno-${{steps.version_check.outputs.releaseVersion}}-windows.exe
+          mv release/macos/juno release/macos/juno-${{steps.version_check.outputs.releaseVersion}}-macos
+          mv release/linux/juno release/linux/juno-${{steps.version_check.outputs.releaseVersion}}-linux
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/**/*
+          tag_name: ${{steps.version_check.outputs.releaseVersion}}
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+
+  release-staging:
+    if: github.ref == 'refs/heads/staging'
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v2
+      - run: git fetch --all --tags
+
+      - name: Check Release Version
+        uses: thebongy/version-check@v1
+        with:
+          file: Cargo.toml
+          tagFormat: v${version}-beta
+        id: version_check
+      
+      - name: Download Windows Artifact
+        uses: actions/download-artifact@v1
+        with:
+          name: juno-windows-latest
+          path: release/windows
+
+      - name: Download MacOS Artifact
+        uses: actions/download-artifact@v1
+        with:
+          name: juno-macos-latest
+          path: release/macos
+
+      - name: Download Linux Artifact
+        uses: actions/download-artifact@v1
+        with:
+          name: juno-ubuntu-latest
+          path: release/linux
+      
+      - name: Rename Artifacts
+        run: |
+          mv release/windows/juno.exe release/windows/juno-${{steps.version_check.outputs.releaseVersion}}-windows.exe
+          mv release/macos/juno release/macos/juno-${{steps.version_check.outputs.releaseVersion}}-macos
+          mv release/linux/juno release/linux/juno-${{steps.version_check.outputs.releaseVersion}}-linux
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/**/*
+          tag_name: ${{steps.version_check.outputs.releaseVersion}}
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
