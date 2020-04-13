@@ -89,8 +89,7 @@ jobs:
           mv release/macos/juno release/macos/juno-${{steps.version_check.outputs.releaseVersion}}-macos
           mv release/linux/juno release/linux/juno-${{steps.version_check.outputs.releaseVersion}}-linux
 
-      - name: Publish Release (master)
-        if: github.ref == 'refs/heads/master'
+      - name: Publish Release
         uses: softprops/action-gh-release@v1
         with:
           files: release/**/*
