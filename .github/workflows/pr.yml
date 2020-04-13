@@ -4,10 +4,10 @@ on:
       - master
       - staging
       - develop
-name: New Release Version Check
+name: Continuous integration (PR)
 jobs:
   version-check:
-    if: (github.base_ref == 'refs/heads/staging') || (github.base_ref == 'refs/heads/master')
+    if: github.base_ref == 'staging' || github.base_ref == 'master'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -15,7 +15,7 @@ jobs:
       - run: git fetch --all --tags
 
       - name: Check Release Version (staging)
-        if: github.base_ref == 'refs/heads/staging'
+        if: github.base_ref == 'staging'
         uses: thebongy/version-check@v1
         with:
           file: Cargo.toml
@@ -23,7 +23,7 @@ jobs:
         id: version_check_staging
       
       - name: Check Release Version (master)
-        if: github.base_ref == 'refs/heads/master'
+        if: github.base_ref == 'master'
         uses: thebongy/version-check@v1
         with:
           file: Cargo.toml
@@ -71,20 +71,17 @@ jobs:
           path: target/release/juno.exe
 
       - name: Cargo test
-        if: github.action == 'pull_request'
         uses: actions-rs/cargo@v1
         with:
           command: test
 
       - name: Cargo fmt
-        if: github.action == 'pull_request'
         uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check
 
       - name: Cargo clippy
-        if: github.action == 'pull_request'
         uses: actions-rs/cargo@v1
         with:
           command: clippy
