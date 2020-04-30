@@ -169,7 +169,7 @@ async fn handle_module_registration(module_comm: &ModuleComm, request_id: &str, 
 		send_error(module_comm, request_id, errors::DUPLICATE_MODULE).await;
 		return;
 	}
-	module_uuid_to_id.insert(module_comm.get_uuid().clone(), String::from(module_id));
+	module_uuid_to_id.insert(*module_comm.get_uuid(), String::from(module_id));
 	drop(module_uuid_to_id);
 
 	logger::verbose("Notifying successful module registration...");
