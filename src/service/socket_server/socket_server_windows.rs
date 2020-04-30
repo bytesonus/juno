@@ -51,9 +51,7 @@ async fn listen_inet_socket(socket_port: &str) -> Result<()> {
 	{
 		close_future = next_close_future;
 		logger::info("Socket connected");
-		task::spawn(async {
-			handle_inet_socket_client(stream).await;
-		});
+		task::spawn(handle_inet_socket_client(stream));
 	}
 
 	logger::verbose("Socket server is closed.");
