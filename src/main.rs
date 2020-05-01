@@ -1,10 +1,12 @@
 #[macro_use]
 extern crate lazy_static;
 extern crate async_std;
+extern crate async_trait;
 extern crate clap;
 extern crate colored;
 extern crate ctrlc;
 extern crate fslock;
+extern crate juno;
 extern crate rand;
 extern crate semver;
 

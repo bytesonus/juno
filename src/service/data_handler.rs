@@ -1,7 +1,7 @@
 use crate::{
-	models::{module, Module, ModuleComm},
+	models::{Module, ModuleComm},
 	utils::{
-		constants::{errors, juno_hooks, request_keys, request_types},
+		constants::{self, errors, juno_hooks, request_keys, request_types},
 		logger,
 	},
 };
@@ -18,10 +18,14 @@ use serde_json::{json, Map, Value};
 use semver::{Version, VersionReq};
 
 lazy_static! {
-	static ref REGISTERED_MODULES: Mutex<HashMap<String, Module>> = Mutex::new(HashMap::new());
-	static ref UNREGISTERED_MODULES: Mutex<HashMap<String, Module>> = Mutex::new(HashMap::new());
-	static ref REQUEST_ORIGINS: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
-	static ref MODULE_UUID_TO_ID: Mutex<HashMap<u128, String>> = Mutex::new(HashMap::new());
+	pub(crate) static ref REGISTERED_MODULES: Mutex<HashMap<String, Module>> =
+		Mutex::new(HashMap::new());
+	pub(crate) static ref UNREGISTERED_MODULES: Mutex<HashMap<String, Module>> =
+		Mutex::new(HashMap::new());
+	pub(crate) static ref REQUEST_ORIGINS: Mutex<HashMap<String, String>> =
+		Mutex::new(HashMap::new());
+	pub(crate) static ref MODULE_UUID_TO_ID: Mutex<HashMap<u128, String>> =
+		Mutex::new(HashMap::new());
 }
 
 pub async fn handle_request(module_comm: &ModuleComm, data: String) {
@@ -169,7 +173,7 @@ async fn handle_module_registration(module_comm: &ModuleComm, request_id: &str, 
 		send_error(module_comm, request_id, errors::DUPLICATE_MODULE).await;
 		return;
 	}
-	module_uuid_to_id.insert(module_comm.get_uuid().clone(), String::from(module_id));
+	module_uuid_to_id.insert(*module_comm.get_uuid(), String::from(module_id));
 	drop(module_uuid_to_id);
 
 	logger::verbose("Notifying successful module registration...");
@@ -188,7 +192,7 @@ async fn handle_module_registration(module_comm: &ModuleComm, request_id: &str, 
 
 		logger::verbose("Triggering activation hook...");
 		trigger_hook_on(
-			&module::JUNO_MODULE,
+			constants::APP_NAME,
 			&module,
 			juno_hooks::ACTIVATED,
 			&Map::new(),
@@ -629,7 +633,7 @@ async fn trigger_hook(
 }
 
 async fn trigger_hook_on(
-	from_module: &Module,
+	from_module: &str,
 	to_module: &Module,
 	hook: &str,
 	data: &Map<String, Value>,
@@ -637,7 +641,7 @@ async fn trigger_hook_on(
 ) {
 	// from_module is trying to trigger a hook on to_module.
 	// if force is true, all modules get the hook, regardless of whether they want it or not
-	let module_id = from_module.get_module_id();
+	let module_id = String::from(from_module);
 	let hook_name = module_id.clone() + "." + hook;
 	logger::info(&format!(
 		"Triggering '{}' hook on module '{}'...",
@@ -745,7 +749,7 @@ async fn recalculate_all_module_dependencies() {
 
 		logger::verbose("Sending ACTIVATED trigger to module...");
 		trigger_hook_on(
-			&module::JUNO_MODULE,
+			constants::APP_NAME,
 			&module,
 			juno_hooks::ACTIVATED,
 			&Map::new(),
@@ -814,7 +818,7 @@ async fn recalculate_all_module_dependencies() {
 
 		logger::verbose("Sending DEACTIVATED trigger to module...");
 		trigger_hook_on(
-			&module::JUNO_MODULE,
+			constants::APP_NAME,
 			&module,
 			juno_hooks::DEACTIVATED,
 			&Map::new(),

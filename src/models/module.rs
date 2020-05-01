@@ -1,4 +1,4 @@
-use crate::utils::{constants, logger};
+use crate::utils::logger;
 
 use std::collections::HashMap;
 
@@ -8,11 +8,7 @@ use futures_util::sink::SinkExt;
 use semver::{Version, VersionReq};
 
 lazy_static! {
-	pub static ref JUNO_MODULE: Module = Module::internal(
-		0,
-		String::from(constants::APP_NAME),
-		Version::parse(constants::APP_VERSION).unwrap(),
-	);
+	pub static ref JUNO_MODULE: Option<Module> = None;
 }
 
 pub struct Module {
@@ -46,20 +42,6 @@ impl Module {
 			registered_hooks: vec![],
 
 			module_sender: Some(module_sender),
-		}
-	}
-
-	fn internal(module_uuid: u128, module_id: String, version: Version) -> Self {
-		Module {
-			registered: true,
-			module_uuid,
-			module_id,
-			version,
-			dependencies: HashMap::new(),
-			declared_functions: vec![],
-			registered_hooks: vec![],
-
-			module_sender: None,
 		}
 	}
 
