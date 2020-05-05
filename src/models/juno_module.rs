@@ -107,7 +107,7 @@ fn list_modules(_: HashMap<String, Value>) -> Value {
 	Value::Array(
 		modules
 			.into_iter()
-			.map(|module| get_object_from_module(module))
+			.map(get_object_from_module)
 			.collect(),
 	)
 }
