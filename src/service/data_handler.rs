@@ -18,14 +18,10 @@ use serde_json::{json, Map, Value};
 use semver::{Version, VersionReq};
 
 lazy_static! {
-	pub(crate) static ref REGISTERED_MODULES: Mutex<HashMap<String, Module>> =
-		Mutex::new(HashMap::new());
-	pub(crate) static ref UNREGISTERED_MODULES: Mutex<HashMap<String, Module>> =
-		Mutex::new(HashMap::new());
-	pub(crate) static ref REQUEST_ORIGINS: Mutex<HashMap<String, String>> =
-		Mutex::new(HashMap::new());
-	pub(crate) static ref MODULE_UUID_TO_ID: Mutex<HashMap<u128, String>> =
-		Mutex::new(HashMap::new());
+	static ref REGISTERED_MODULES: Mutex<HashMap<String, Module>> = Mutex::new(HashMap::new());
+	static ref UNREGISTERED_MODULES: Mutex<HashMap<String, Module>> = Mutex::new(HashMap::new());
+	static ref REQUEST_ORIGINS: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
+	static ref MODULE_UUID_TO_ID: Mutex<HashMap<u128, String>> = Mutex::new(HashMap::new());
 }
 
 pub async fn handle_request(module_comm: &ModuleComm, data: String) {
@@ -88,6 +84,44 @@ pub async fn handle_request(module_comm: &ModuleComm, data: String) {
 		}
 	}
 	logger::verbose("Completed processing the request");
+}
+
+pub async fn get_registered_modules() -> Vec<Module> {
+	let registered_modules = REGISTERED_MODULES.lock().await;
+	let mut modules = vec![];
+
+	for module in registered_modules.values() {
+		modules.push(module.clone());
+	}
+
+	modules
+}
+
+pub async fn get_unregistered_modules() -> Vec<Module> {
+	let unregistered_modules = UNREGISTERED_MODULES.lock().await;
+	let mut modules = vec![];
+
+	for module in unregistered_modules.values() {
+		modules.push(module.clone());
+	}
+
+	modules
+}
+
+pub async fn get_module_by_id(module_id: &str) -> Option<Module> {
+	let registered_modules = REGISTERED_MODULES.lock().await;
+	if registered_modules.contains_key(module_id) {
+		return Some(registered_modules.get(module_id).unwrap().clone());
+	}
+	drop(registered_modules);
+
+	let unregistered_modules = UNREGISTERED_MODULES.lock().await;
+	if unregistered_modules.contains_key(module_id) {
+		return Some(unregistered_modules.get(module_id).unwrap().clone());
+	}
+	drop(unregistered_modules);
+
+	None
 }
 
 async fn handle_module_registration(module_comm: &ModuleComm, request_id: &str, request: &Value) {
@@ -247,6 +281,10 @@ async fn handle_declare_function(module_comm: &ModuleComm, request_id: &str, req
 	let function = String::from(function);
 	if !module.is_function_declared(&function) {
 		module.declare_function(function.clone());
+		logger::info(&format!(
+			"Function '{}' declared on module '{}'",
+			function, module_id
+		));
 	} else {
 		logger::warn("This function is already declared. No need to register it again");
 	}

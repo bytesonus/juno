@@ -1,4 +1,4 @@
-use crate::{constants, service::data_handler};
+use crate::{constants, models::Module, service::data_handler};
 use juno::models::Value;
 
 use std::collections::HashMap;
@@ -10,8 +10,7 @@ use futures_util::sink::SinkExt;
 use juno::{
 	connection::{BaseConnection, Buffer},
 	protocol::BaseProtocol,
-	Error,
-	JunoModule,
+	Error, JunoModule,
 };
 
 pub(crate) struct DirectConnection {
@@ -95,15 +94,76 @@ pub(crate) async fn setup_juno_module(
 		.unwrap();
 
 	module
+		.declare_function("getModuleInfo", get_module_info)
+		.await
+		.unwrap();
+
+	module
 }
 
 fn list_modules(_: HashMap<String, Value>) -> Value {
-	let registered_modules = task::block_on(data_handler::REGISTERED_MODULES.lock());
-	let mut modules = vec![];
+	let mut modules = task::block_on(data_handler::get_registered_modules());
+	modules.extend(task::block_on(data_handler::get_unregistered_modules()));
+	Value::Array(
+		modules
+			.into_iter()
+			.map(|module| get_object_from_module(module))
+			.collect(),
+	)
+}
 
-	for module in registered_modules.keys() {
-		modules.push(Value::String(module.clone()));
+fn get_module_info(args: HashMap<String, Value>) -> Value {
+	let module_id = args.get("moduleId");
+	if module_id.is_none() {
+		return Value::Null;
 	}
+	let module_id = module_id.unwrap().as_string();
+	if module_id.is_none() {
+		return Value::Null;
+	}
+	let module_id = module_id.unwrap();
 
-	Value::Array(modules)
+	if let Some(module) = task::block_on(data_handler::get_module_by_id(module_id)) {
+		get_object_from_module(module)
+	} else {
+		Value::Null
+	}
+}
+
+fn get_object_from_module(module: Module) -> Value {
+	let Module {
+		module_id,
+		registered,
+		version,
+		dependencies,
+		declared_functions,
+		registered_hooks,
+		..
+	} = module;
+	Value::Object({
+		let mut map = HashMap::new();
+
+		map.insert(String::from("moduleId"), Value::String(module_id));
+		map.insert(String::from("version"), Value::String(version.to_string()));
+		map.insert(
+			String::from("dependencies"),
+			Value::Object(
+				dependencies
+					.into_iter()
+					.map(|(key, value)| (key, Value::String(value.to_string())))
+					.collect(),
+			),
+		);
+		map.insert(String::from("registered"), Value::Bool(registered));
+		map.insert(
+			String::from("declaredFunctions"),
+			Value::Array(declared_functions.into_iter().map(Value::String).collect()),
+		);
+		map.insert(
+			String::from("registeredHooks"),
+			Value::Array(registered_hooks.into_iter().map(Value::String).collect()),
+		);
+
+		map
+	})
 }

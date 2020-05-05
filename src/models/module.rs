@@ -2,26 +2,29 @@ use crate::utils::logger;
 
 use std::collections::HashMap;
 
+use async_std::sync::RwLock;
 use futures::channel::mpsc::UnboundedSender;
 use futures_util::sink::SinkExt;
 
 use semver::{Version, VersionReq};
 
 lazy_static! {
-	pub static ref JUNO_MODULE: Option<Module> = None;
+	pub(crate) static ref JUNO_MODULE: RwLock<Option<Module>> = RwLock::new(None);
 }
 
+#[derive(Clone)]
+// These are public so that they can be destructed someplace else to avoid cloning
 pub struct Module {
-	registered: bool,
+	pub(crate) registered: bool,
 	module_uuid: u128,
-	module_id: String,
-	version: Version,
-	dependencies: HashMap<String, VersionReq>,
-	declared_functions: Vec<String>,
+	pub(crate) module_id: String,
+	pub(crate) version: Version,
+	pub(crate) dependencies: HashMap<String, VersionReq>,
+	pub(crate) declared_functions: Vec<String>,
 	// These are the (global) hooks that this particular module is listening for
-	registered_hooks: Vec<String>,
+	pub(crate) registered_hooks: Vec<String>,
 
-	module_sender: Option<UnboundedSender<String>>,
+	module_sender: UnboundedSender<String>,
 }
 
 #[allow(dead_code)]
@@ -41,7 +44,7 @@ impl Module {
 			declared_functions: vec![],
 			registered_hooks: vec![],
 
-			module_sender: Some(module_sender),
+			module_sender,
 		}
 	}
 
@@ -105,13 +108,8 @@ impl Module {
 	}
 
 	pub async fn send(&self, data: String) {
-		let sender = &self.module_sender;
+		let mut sender = &self.module_sender;
 
-		if sender.is_none() {
-			return;
-		}
-
-		let mut sender = sender.as_ref().unwrap();
 		let result = sender.send(data).await;
 		if let Err(error) = result {
 			logger::error(&format!("Error queing data to module: {}", error));
@@ -119,13 +117,8 @@ impl Module {
 	}
 
 	pub async fn close_sender(&self) {
-		let sender = &self.module_sender;
+		let mut sender = &self.module_sender;
 
-		if sender.is_none() {
-			return;
-		}
-
-		let mut sender = sender.as_ref().unwrap();
 		let result = sender.close().await;
 		if let Err(error) = result {
 			logger::error(&format!("Error closing module's sending queue: {}", error));
