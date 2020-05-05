@@ -10,7 +10,8 @@ use futures_util::sink::SinkExt;
 use juno::{
 	connection::{BaseConnection, Buffer},
 	protocol::BaseProtocol,
-	Error, JunoModule,
+	Error,
+	JunoModule,
 };
 
 pub(crate) struct DirectConnection {
@@ -104,12 +105,7 @@ pub(crate) async fn setup_juno_module(
 fn list_modules(_: HashMap<String, Value>) -> Value {
 	let mut modules = task::block_on(data_handler::get_registered_modules());
 	modules.extend(task::block_on(data_handler::get_unregistered_modules()));
-	Value::Array(
-		modules
-			.into_iter()
-			.map(get_object_from_module)
-			.collect(),
-	)
+	Value::Array(modules.into_iter().map(get_object_from_module).collect())
 }
 
 fn get_module_info(args: HashMap<String, Value>) -> Value {
