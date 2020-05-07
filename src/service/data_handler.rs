@@ -182,6 +182,10 @@ async fn handle_module_registration(module_comm: &ModuleComm, request_id: &str, 
 	}
 	let version = version.unwrap();
 
+	logger::info(&format!(
+		"Registering module '{}' with version '{}'...",
+		module_id, version
+	));
 	let mut module = Module::new(
 		*module_comm.get_uuid(),
 		String::from(module_id),
@@ -328,7 +332,10 @@ async fn handle_function_call(module_comm: &ModuleComm, request_id: &str, reques
 		return;
 	}
 	let function = function.unwrap();
-	logger::verbose(&format!("Got request to call function '{}'", function));
+	logger::info(&format!(
+		"Got request from module '{}' to call function '{}'",
+		module_id, function
+	));
 	let function_name = is_function_name(function);
 
 	if function_name.is_none() {
@@ -440,7 +447,10 @@ async fn handle_function_response(module_comm: &ModuleComm, request_id: &str, re
 		return;
 	}
 
-	logger::verbose("Sending back response to origin module...");
+	logger::info(&format!(
+		"Sending response from module '{}' to caller module '{}'...",
+		module_id, origin_module_id
+	));
 	send_module(registered_modules.get(&origin_module_id).unwrap(), request).await;
 	logger::verbose("Function response to origin module successfully sent.");
 }
@@ -473,6 +483,11 @@ async fn handle_register_hook(module_comm: &ModuleComm, request_id: &str, reques
 		return;
 	}
 	let hook = String::from(hook.unwrap());
+
+	logger::info(&format!(
+		"Registering module '{}' for the hook '{}'...",
+		module_id, hook
+	));
 
 	if !module.is_hook_registered(&hook) {
 		logger::verbose(&format!(
@@ -538,7 +553,10 @@ async fn handle_trigger_hook(module_comm: &ModuleComm, request_id: &str, request
 		data.unwrap().clone()
 	};
 
-	logger::verbose(&format!("Triggering hook '{}' on all modules...", hook));
+	logger::info(&format!(
+		"Triggering hook '{}' from module '{}' on all modules...",
+		hook, module_id,
+	));
 	trigger_hook(&module, &hook, &data, false, false).await;
 
 	logger::verbose(
@@ -557,7 +575,7 @@ async fn handle_trigger_hook(module_comm: &ModuleComm, request_id: &str, request
 }
 
 pub async fn on_module_disconnected(module_comm: &ModuleComm) {
-	logger::info(&format!(
+	logger::verbose(&format!(
 		"Module with UUID {} disconnected. Processing...",
 		module_comm.get_uuid()
 	));
@@ -596,6 +614,10 @@ pub async fn on_module_disconnected(module_comm: &ModuleComm) {
 	}
 	drop(registered_modules);
 	drop(unregistered_modules);
+	logger::info(&format!(
+		"Module '{}' disconnected.",
+		module_id
+	));
 
 	recalculate_all_module_dependencies().await;
 	logger::verbose("Module is no longer tracked");
@@ -616,10 +638,6 @@ async fn trigger_hook(
 	// if force is true, all modules get the hook, regardless of whether they want it or not
 	let module_id = module.get_module_id();
 	let hook_name = module_id.clone() + "." + hook;
-	logger::info(&format!(
-		"Module '{}' is triggering the hook '{}' on all modules",
-		module_id, hook_name
-	));
 
 	logger::verbose("Iterating all registered modules to send hook to...");
 	for registered_module in REGISTERED_MODULES.lock().await.values() {

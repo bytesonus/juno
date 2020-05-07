@@ -10,8 +10,7 @@ use futures_util::sink::SinkExt;
 use juno::{
 	connection::{BaseConnection, Buffer},
 	protocol::BaseProtocol,
-	Error,
-	JunoModule,
+	Error, JunoModule,
 };
 
 pub(crate) struct DirectConnection {
