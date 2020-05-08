@@ -477,7 +477,8 @@ async fn handle_trigger_hook(module_comm: &ModuleComm, request_id: &str, request
 		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
 		return;
 	}
-	let module = module.unwrap();
+	let module = module.unwrap().clone();
+	drop(registered_modules);
 
 	let hook = request[request_keys::HOOK].as_str();
 	if hook == None {
@@ -503,7 +504,7 @@ async fn handle_trigger_hook(module_comm: &ModuleComm, request_id: &str, request
 		"Hook triggered on all modules. Informing origin module of successful hook trigger...",
 	);
 	send_module(
-		module,
+		&module,
 		&json!(
 		{
 			request_keys::REQUEST_ID: request_id,
