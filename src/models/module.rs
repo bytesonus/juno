@@ -15,6 +15,7 @@ lazy_static! {
 	);
 }
 
+#[derive(Clone)]
 pub struct Module {
 	registered: bool,
 	module_uuid: u128,

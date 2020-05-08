@@ -9,6 +9,7 @@ As of now, there are official bindings to these supported languages:
 - Rust: [juno-rust](https://github.com/bytesonus/juno-rust)
 - NodeJS: [juno-node](https://github.com/bytesonus/juno-node)
 - .NET: [juno-dotnet](https://github.com/bytesonus/juno-dotnet)
+- Go: [juno-go](https://github.com/bytesonus/juno-go)
 
 PRs to add support for more languages are welcome.
 
