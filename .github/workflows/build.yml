@@ -65,6 +65,20 @@ jobs:
           tagFormat: v${version}
         id: version_check
       
+      - name: Generate docker tags (ubuntu)
+        uses: thebongy/version-check@v1
+        with:
+          file: Cargo.toml
+          tagFormat: ${version}
+        id: docker_tags_ubuntu
+
+      - name: Check docker tags (alpine)
+        uses: thebongy/version-check@v1
+        with:
+          file: Cargo.toml
+          tagFormat: ${version}-beta-alpine
+        id: docker_tags_alpine
+
       - name: Download Windows Artifact
         uses: actions/download-artifact@v1
         with:
@@ -88,6 +102,24 @@ jobs:
           mv release/windows/juno.exe release/windows/juno-${{steps.version_check.outputs.releaseVersion}}-windows.exe
           mv release/macos/juno release/macos/juno-${{steps.version_check.outputs.releaseVersion}}-macos
           mv release/linux/juno release/linux/juno-${{steps.version_check.outputs.releaseVersion}}-linux
+        
+      - name: Publish ubuntu docker image
+        uses: docker/build-push-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          repository: bytesonus/juno
+          tags: latest,${{ steps.docker_tags_ubuntu.outputs.releaseTags }}
+          dockerfile: ./Dockerfile
+        
+      - name: Publish alpine docker image
+        uses: docker/build-push-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          repository: bytesonus/juno
+          tags: latest-alpine,${{ steps.docker_tags_alpine.outputs.rawVersion }}
+          dockerfile: ./Dockerfile.alpine
 
       - name: Publish Release
         uses: softprops/action-gh-release@v1
@@ -113,7 +145,21 @@ jobs:
           file: Cargo.toml
           tagFormat: v${version}-beta
         id: version_check
-      
+
+      - name: Generate docker tags (ubuntu)
+        uses: thebongy/version-check@v1
+        with:
+          file: Cargo.toml
+          tagFormat: ${version}-beta
+        id: docker_tags_ubuntu
+
+      - name: Check docker tags (alpine)
+        uses: thebongy/version-check@v1
+        with:
+          file: Cargo.toml
+          tagFormat: ${version}-beta-alpine
+        id: docker_tags_alpine
+        
       - name: Download Windows Artifact
         uses: actions/download-artifact@v1
         with:
@@ -137,6 +183,24 @@ jobs:
           mv release/windows/juno.exe release/windows/juno-${{steps.version_check.outputs.releaseVersion}}-windows.exe
           mv release/macos/juno release/macos/juno-${{steps.version_check.outputs.releaseVersion}}-macos
           mv release/linux/juno release/linux/juno-${{steps.version_check.outputs.releaseVersion}}-linux
+        
+      - name: Publish ubuntu docker image
+        uses: docker/build-push-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          repository: bytesonus/juno
+          tags: beta,${{ steps.docker_tags_ubuntu.outputs.releaseTags }}
+          dockerfile: ./Dockerfile
+        
+      - name: Publish alpine docker image
+        uses: docker/build-push-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          repository: bytesonus/juno
+          tags: beta-alpine,${{ steps.docker_tags_alpine.outputs.releaseTags }}
+          dockerfile: ./Dockerfile.alpine
 
       - name: Publish Release
         uses: softprops/action-gh-release@v1
