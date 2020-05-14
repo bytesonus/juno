@@ -22,6 +22,8 @@ pub mod request_keys {
 pub mod juno_hooks {
 	pub const ACTIVATED: &str = "activated";
 	pub const DEACTIVATED: &str = "deactivated";
+	pub const MODULE_ACTIVATED: &str = "moduleActivated";
+	pub const MODULE_DEACTIVATED: &str = "moduleDeactivated";
 }
 
 pub mod request_types {
