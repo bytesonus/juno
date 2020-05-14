@@ -65,6 +65,20 @@ jobs:
           tagFormat: v${version}
         id: version_check
       
+      - name: Generate docker tags (ubuntu)
+        uses: thebongy/version-check@v1
+        with:
+          file: Cargo.toml
+          tagFormat: ${version}
+        id: docker_tags_ubuntu
+
+      - name: Check docker tags (alpine)
+        uses: thebongy/version-check@v1
+        with:
+          file: Cargo.toml
+          tagFormat: ${version}-beta-alpine
+        id: docker_tags_alpine
+
       - name: Download Windows Artifact
         uses: actions/download-artifact@v1
         with:
@@ -95,7 +109,7 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
           repository: bytesonus/juno
-          tags: latest,${{ steps.version_check.outputs.releaseTags }}
+          tags: latest,${{ steps.docker_tags_ubuntu.outputs.releaseTags }}
           dockerfile: ./Dockerfile
         
       - name: Publish alpine docker image
@@ -104,7 +118,7 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
           repository: bytesonus/juno
-          tags: latest-alpine,${{ steps.version_check.outputs.rawVersion }}-alpine
+          tags: latest-alpine,${{ steps.docker_tags_ubuntu.outputs.rawVersion }}
           dockerfile: ./Dockerfile.alpine
 
       - name: Publish Release
@@ -131,7 +145,21 @@ jobs:
           file: Cargo.toml
           tagFormat: v${version}-beta
         id: version_check
-      
+
+      - name: Generate docker tags (ubuntu)
+        uses: thebongy/version-check@v1
+        with:
+          file: Cargo.toml
+          tagFormat: ${version}-beta
+        id: docker_tags_ubuntu
+
+      - name: Check docker tags (alpine)
+        uses: thebongy/version-check@v1
+        with:
+          file: Cargo.toml
+          tagFormat: ${version}-beta-alpine
+        id: docker_tags_alpine
+        
       - name: Download Windows Artifact
         uses: actions/download-artifact@v1
         with:
@@ -162,7 +190,7 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
           repository: bytesonus/juno
-          tags: beta,${{ steps.version_check.outputs.rawVersion }}-beta
+          tags: beta,${{ steps.docker_tags_ubuntu.outputs.releaseTags }}
           dockerfile: ./Dockerfile
         
       - name: Publish alpine docker image
@@ -171,7 +199,7 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
           repository: bytesonus/juno
-          tags: beta-alpine,${{ steps.version_check.outputs.rawVersion }}-beta-alpine
+          tags: beta-alpine,${{ steps.docker_tags_alpine.outputs.releaseTags }}
           dockerfile: ./Dockerfile.alpine
 
       - name: Publish Release
