@@ -118,7 +118,7 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
           repository: bytesonus/juno
-          tags: latest-alpine,${{ steps.docker_tags_ubuntu.outputs.rawVersion }}
+          tags: latest-alpine,${{ steps.docker_tags_alpine.outputs.rawVersion }}
           dockerfile: ./Dockerfile.alpine
 
       - name: Publish Release
