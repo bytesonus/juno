@@ -247,12 +247,14 @@ async fn handle_module_registration(module_comm: &ModuleComm, request_id: &str, 
 		drop(unregistered_modules);
 
 		logger::verbose("Notifying all modules of activated module...");
+		let juno_module = REGISTERED_MODULES
+			.lock()
+			.await
+			.get(constants::APP_NAME)
+			.unwrap()
+			.clone();
 		trigger_hook(
-			REGISTERED_MODULES
-				.lock()
-				.await
-				.get(constants::APP_NAME)
-				.unwrap(),
+			&juno_module,
 			juno_hooks::MODULE_ACTIVATED,
 			json!({ request_keys::MODULE_ID: module_id })
 				.as_object()
@@ -636,10 +638,7 @@ pub async fn on_module_disconnected(module_comm: &ModuleComm) {
 	}
 	drop(registered_modules);
 	drop(unregistered_modules);
-	logger::info(&format!(
-		"Module '{}' disconnected.",
-		module_id
-	));
+	logger::info(&format!("Module '{}' disconnected.", module_id));
 
 	recalculate_all_module_dependencies().await;
 	logger::verbose("Module is no longer tracked");
