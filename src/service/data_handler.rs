@@ -242,15 +242,36 @@ async fn handle_module_registration(module_comm: &ModuleComm, request_id: &str, 
 		logger::verbose("Dependencies are none. Adding to registered modules...");
 		registered_modules.insert(String::from(module_id), module);
 		logger::verbose("Module added to registered modules");
+
+		drop(registered_modules);
+		drop(unregistered_modules);
+
+		logger::verbose("Notifying all modules of activated module...");
+		trigger_hook(
+			REGISTERED_MODULES
+				.lock()
+				.await
+				.get(constants::APP_NAME)
+				.unwrap(),
+			juno_hooks::MODULE_ACTIVATED,
+			json!({ request_keys::MODULE_ID: module_id })
+				.as_object()
+				.unwrap(),
+			false,
+			false,
+		)
+		.await;
+		logger::verbose("All modules notified of activated module");
 	} else {
 		module.set_registered(false);
 
 		logger::verbose("Module has dependencies. Adding to unregistered modules...");
 		unregistered_modules.insert(String::from(module_id), module);
 		logger::verbose("Module added to unregistered modules");
+
+		drop(registered_modules);
+		drop(unregistered_modules);
 	}
-	drop(registered_modules);
-	drop(unregistered_modules);
 
 	recalculate_all_module_dependencies().await;
 }
@@ -534,7 +555,8 @@ async fn handle_trigger_hook(module_comm: &ModuleComm, request_id: &str, request
 		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
 		return;
 	}
-	let module = module.unwrap();
+	let module = module.unwrap().clone();
+	drop(registered_modules);
 
 	let hook = request[request_keys::HOOK].as_str();
 	if hook == None {
@@ -563,7 +585,7 @@ async fn handle_trigger_hook(module_comm: &ModuleComm, request_id: &str, request
 		"Hook triggered on all modules. Informing origin module of successful hook trigger...",
 	);
 	send_module(
-		module,
+		&module,
 		&json!(
 		{
 			request_keys::REQUEST_ID: request_id,
@@ -795,12 +817,12 @@ async fn recalculate_all_module_dependencies() {
 
 	logger::verbose("Registering all satisfied modules...");
 	// For all modules whose dependencies are now satisfied, register them
-	for module_id in satisfied_modules {
+	for module_id in satisfied_modules.iter() {
 		logger::verbose(&format!(
 			"Module {} is now satisfied. Registering...",
 			module_id
 		));
-		let mut module = unregistered_modules.remove(&module_id).unwrap();
+		let mut module = unregistered_modules.remove(module_id).unwrap();
 		module.set_registered(true);
 
 		logger::verbose("Sending ACTIVATED trigger to module...");
@@ -815,10 +837,36 @@ async fn recalculate_all_module_dependencies() {
 		logger::verbose("ACTIVATED trigger sent.");
 
 		logger::verbose("Adding module to registered_modules...");
-		registered_modules.insert(module_id, module);
+		registered_modules.insert(module_id.clone(), module);
 		logger::verbose("Module registered");
 	}
 	logger::verbose("All newly satisfied modules registered");
+	drop(registered_modules);
+	drop(unregistered_modules);
+
+	let juno_module = REGISTERED_MODULES
+		.lock()
+		.await
+		.get(constants::APP_NAME)
+		.unwrap()
+		.clone();
+	logger::verbose("Notifying all modules of activated modules...");
+	for module_id in satisfied_modules {
+		trigger_hook(
+			&juno_module,
+			juno_hooks::MODULE_ACTIVATED,
+			json!({ request_keys::MODULE_ID: module_id })
+				.as_object()
+				.unwrap(),
+			false,
+			false,
+		)
+		.await;
+	}
+	logger::verbose("All modules notified of activated modules");
+
+	let mut registered_modules = REGISTERED_MODULES.lock().await;
+	let mut unregistered_modules = UNREGISTERED_MODULES.lock().await;
 
 	// List of all modules whose dependencies were satisfied but aren't now
 	let mut unsatisfied_modules: Vec<String> = vec![];
@@ -864,12 +912,12 @@ async fn recalculate_all_module_dependencies() {
 
 	logger::verbose("Unregistering all modules that are no longer satisfied...");
 	// For all modules whose dependencies are no longer satisfied, unregister them
-	for module_id in unsatisfied_modules {
+	for module_id in unsatisfied_modules.iter() {
 		logger::verbose(&format!(
 			"Module {} is no longer satisfied. Unregistering...",
 			module_id
 		));
-		let mut module = registered_modules.remove(&module_id).unwrap();
+		let mut module = registered_modules.remove(module_id).unwrap();
 		module.set_registered(false);
 
 		logger::verbose("Sending DEACTIVATED trigger to module...");
@@ -884,10 +932,27 @@ async fn recalculate_all_module_dependencies() {
 		logger::verbose("DEACTIVATED trigger sent");
 
 		logger::verbose("Adding module to unregistered_modules...");
-		unregistered_modules.insert(module_id, module);
+		unregistered_modules.insert(module_id.clone(), module);
 		logger::verbose("Module unregistered");
 	}
 	logger::verbose("All module whose dependencies are no longer satisfied are unregistered");
+	drop(registered_modules);
+	drop(unregistered_modules);
+
+	logger::verbose("Notifying all modules of deactivated modules...");
+	for module_id in unsatisfied_modules {
+		trigger_hook(
+			&juno_module,
+			juno_hooks::MODULE_DEACTIVATED,
+			json!({ request_keys::MODULE_ID: module_id })
+				.as_object()
+				.unwrap(),
+			false,
+			false,
+		)
+		.await;
+	}
+	logger::verbose("All modules notified of deactivated modules");
 
 	logger::verbose("All module dependencies recalculated");
 }

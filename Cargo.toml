@@ -1,6 +1,6 @@
 [package]
 name = "juno"
-version = "0.1.1"
+version = "0.1.3"
 authors = ["Rakshith Ravi <rakshith.ravi@gmx.com>"]
 edition = "2018"
 
