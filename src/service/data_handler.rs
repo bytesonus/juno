@@ -11,17 +11,16 @@ use std::{
 	time::{SystemTime, UNIX_EPOCH},
 };
 
-use async_std::sync::Mutex;
-
+use dashmap::DashMap;
 use serde_json::{json, Map, Value};
 
 use semver::{Version, VersionReq};
 
 lazy_static! {
-	static ref REGISTERED_MODULES: Mutex<HashMap<String, Module>> = Mutex::new(HashMap::new());
-	static ref UNREGISTERED_MODULES: Mutex<HashMap<String, Module>> = Mutex::new(HashMap::new());
-	static ref REQUEST_ORIGINS: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
-	static ref MODULE_UUID_TO_ID: Mutex<HashMap<u128, String>> = Mutex::new(HashMap::new());
+	static ref REGISTERED_MODULES: DashMap<String, Module> = DashMap::new();
+	static ref UNREGISTERED_MODULES: DashMap<String, Module> = DashMap::new();
+	static ref REQUEST_ORIGINS: DashMap<String, String> = DashMap::new();
+	static ref MODULE_UUID_TO_ID: DashMap<u128, String> = DashMap::new();
 }
 
 pub async fn handle_request(module_comm: &ModuleComm, data: String) {
@@ -87,39 +86,33 @@ pub async fn handle_request(module_comm: &ModuleComm, data: String) {
 }
 
 pub async fn get_registered_modules() -> Vec<Module> {
-	let registered_modules = REGISTERED_MODULES.lock().await;
 	let mut modules = vec![];
 
-	for module in registered_modules.values() {
-		modules.push(module.clone());
+	for module in REGISTERED_MODULES.iter() {
+		modules.push(module.value().clone());
 	}
 
 	modules
 }
 
 pub async fn get_unregistered_modules() -> Vec<Module> {
-	let unregistered_modules = UNREGISTERED_MODULES.lock().await;
 	let mut modules = vec![];
 
-	for module in unregistered_modules.values() {
-		modules.push(module.clone());
+	for module in UNREGISTERED_MODULES.iter() {
+		modules.push(module.value().clone());
 	}
 
 	modules
 }
 
 pub async fn get_module_by_id(module_id: &str) -> Option<Module> {
-	let registered_modules = REGISTERED_MODULES.lock().await;
-	if registered_modules.contains_key(module_id) {
-		return Some(registered_modules.get(module_id).unwrap().clone());
+	if REGISTERED_MODULES.contains_key(module_id) {
+		return Some(REGISTERED_MODULES.get(module_id).unwrap().value().clone());
 	}
-	drop(registered_modules);
 
-	let unregistered_modules = UNREGISTERED_MODULES.lock().await;
-	if unregistered_modules.contains_key(module_id) {
-		return Some(unregistered_modules.get(module_id).unwrap().clone());
+	if UNREGISTERED_MODULES.contains_key(module_id) {
+		return Some(UNREGISTERED_MODULES.get(module_id).unwrap().value().clone());
 	}
-	drop(unregistered_modules);
 
 	None
 }
@@ -194,10 +187,7 @@ async fn handle_module_registration(module_comm: &ModuleComm, request_id: &str, 
 	);
 	module.set_dependencies(dependency_map);
 
-	let mut registered_modules = REGISTERED_MODULES.lock().await;
-	let mut unregistered_modules = UNREGISTERED_MODULES.lock().await;
-
-	if registered_modules.contains_key(module_id) || unregistered_modules.contains_key(module_id) {
+	if REGISTERED_MODULES.contains_key(module_id) || UNREGISTERED_MODULES.contains_key(module_id) {
 		logger::debug("Either registered modules or unregistered modules already has this moduleId. Sending error...");
 		send_error(module_comm, request_id, errors::DUPLICATE_MODULE).await;
 		return;
@@ -205,14 +195,12 @@ async fn handle_module_registration(module_comm: &ModuleComm, request_id: &str, 
 
 	// Register that this uuid belongs to this moduleId
 	// check if this module_comm already has a corresponding module
-	let mut module_uuid_to_id = MODULE_UUID_TO_ID.lock().await;
-	if module_uuid_to_id.contains_key(module_comm.get_uuid()) {
+	if MODULE_UUID_TO_ID.contains_key(module_comm.get_uuid()) {
 		logger::debug("A moduleId for that UUID already exists. This looks like a duplicate module. Sending error...");
 		send_error(module_comm, request_id, errors::DUPLICATE_MODULE).await;
 		return;
 	}
-	module_uuid_to_id.insert(*module_comm.get_uuid(), String::from(module_id));
-	drop(module_uuid_to_id);
+	MODULE_UUID_TO_ID.insert(*module_comm.get_uuid(), String::from(module_id));
 
 	logger::verbose("Notifying successful module registration...");
 	send_module(
@@ -240,18 +228,14 @@ async fn handle_module_registration(module_comm: &ModuleComm, request_id: &str, 
 		logger::verbose("Activation hook triggered");
 
 		logger::verbose("Dependencies are none. Adding to registered modules...");
-		registered_modules.insert(String::from(module_id), module);
+		REGISTERED_MODULES.insert(String::from(module_id), module);
 		logger::verbose("Module added to registered modules");
-
-		drop(registered_modules);
-		drop(unregistered_modules);
 
 		logger::verbose("Notifying all modules of activated module...");
 		let juno_module = REGISTERED_MODULES
-			.lock()
-			.await
 			.get(constants::APP_NAME)
 			.unwrap()
+			.value()
 			.clone();
 		trigger_hook(
 			&juno_module,
@@ -268,11 +252,8 @@ async fn handle_module_registration(module_comm: &ModuleComm, request_id: &str, 
 		module.set_registered(false);
 
 		logger::verbose("Module has dependencies. Adding to unregistered modules...");
-		unregistered_modules.insert(String::from(module_id), module);
+		UNREGISTERED_MODULES.insert(String::from(module_id), module);
 		logger::verbose("Module added to unregistered modules");
-
-		drop(registered_modules);
-		drop(unregistered_modules);
 	}
 
 	recalculate_all_module_dependencies().await;
@@ -288,16 +269,13 @@ async fn handle_declare_function(module_comm: &ModuleComm, request_id: &str, req
 	}
 	let module_id = module_id.unwrap();
 
-	let mut registered_modules = REGISTERED_MODULES.lock().await;
-
 	// Check if module is registered
-	if !registered_modules.contains_key(&module_id) {
+	if !REGISTERED_MODULES.contains_key(&module_id) {
 		logger::debug("This module is not registered. Sending error...");
 		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
 		return;
 	}
 
-	let module = registered_modules.get_mut(&module_id).unwrap();
 	let function = request[request_keys::FUNCTION].as_str();
 	if function.is_none() {
 		logger::debug("Function is not parsable as a string. Sending error...");
@@ -306,15 +284,24 @@ async fn handle_declare_function(module_comm: &ModuleComm, request_id: &str, req
 	}
 	let function = function.unwrap();
 	let function = String::from(function);
-	if !module.is_function_declared(&function) {
-		module.declare_function(function.clone());
-		logger::info(&format!(
-			"Function '{}' declared on module '{}'",
-			function, module_id
-		));
-	} else {
-		logger::warn("This function is already declared. No need to register it again");
-	}
+
+	let module = REGISTERED_MODULES
+		.update_get(&module_id, |module_id, module| {
+			let mut module = module.clone();
+			if !module.is_function_declared(&function) {
+				module.declare_function(function.clone());
+				logger::info(&format!(
+					"Function '{}' declared on module '{}'",
+					function, module_id
+				));
+				module
+			} else {
+				logger::warn("This function is already declared. No need to register it again");
+				module
+			}
+		})
+		.unwrap();
+	let module = module.value();
 
 	logger::verbose("Informing module of successful function declaration...");
 	send_module(
@@ -341,7 +328,7 @@ async fn handle_function_call(module_comm: &ModuleComm, request_id: &str, reques
 	let module_id = module_id.unwrap();
 
 	// Check if module is registered
-	if !REGISTERED_MODULES.lock().await.contains_key(&module_id) {
+	if !REGISTERED_MODULES.contains_key(&module_id) {
 		logger::debug("This module is not registered. Sending error...");
 		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
 		return;
@@ -374,8 +361,7 @@ async fn handle_function_call(module_comm: &ModuleComm, request_id: &str, reques
 		function_name, module_name
 	));
 
-	let registered_modules = REGISTERED_MODULES.lock().await;
-	if !registered_modules.contains_key(&module_name) {
+	if !REGISTERED_MODULES.contains_key(&module_name) {
 		logger::debug(&format!(
 			"The module '{}' is not registered. Sending error...",
 			module_name
@@ -384,7 +370,8 @@ async fn handle_function_call(module_comm: &ModuleComm, request_id: &str, reques
 		return;
 	}
 
-	let receiver_module = registered_modules.get(&module_name).unwrap();
+	let receiver_module = REGISTERED_MODULES.get(&module_name).unwrap();
+	let receiver_module = receiver_module.value();
 	if !receiver_module.is_function_declared(&function_name) {
 		logger::debug(&format!(
 			"The function '{}' is not declared. Sending error...",
@@ -394,10 +381,9 @@ async fn handle_function_call(module_comm: &ModuleComm, request_id: &str, reques
 		return;
 	}
 
-	let mut request_origins = REQUEST_ORIGINS.lock().await;
 	let request_id_heap = String::from(request_id);
-	if request_origins.contains_key(&request_id_heap) {
-		if request_origins[&request_id_heap] != module_id {
+	if REQUEST_ORIGINS.contains_key(&request_id_heap) {
+		if REQUEST_ORIGINS.get(&request_id_heap).unwrap().value() != &module_id {
 			// There's already a requestId that's supposed to return to
 			// a different module. Let the module know that it's invalid
 			// so that we can prevent response-hijacking.
@@ -409,9 +395,8 @@ async fn handle_function_call(module_comm: &ModuleComm, request_id: &str, reques
 		}
 	} else {
 		logger::verbose("Registering the requestId along with it's origin module.");
-		request_origins.insert(request_id_heap, module_id);
+		REQUEST_ORIGINS.insert(request_id_heap, module_id);
 	}
-	drop(request_origins);
 
 	let mut response = request.clone();
 	logger::verbose("Cloning request to send as response");
@@ -440,8 +425,7 @@ async fn handle_function_response(module_comm: &ModuleComm, request_id: &str, re
 	let module_id = module_id.unwrap();
 
 	// Check if module is registered
-	let registered_modules = REGISTERED_MODULES.lock().await;
-	if !registered_modules.contains_key(&module_id) {
+	if !REGISTERED_MODULES.contains_key(&module_id) {
 		logger::debug(&format!(
 			"The module '{}' is not registered. Sending error...",
 			module_id
@@ -450,9 +434,7 @@ async fn handle_function_response(module_comm: &ModuleComm, request_id: &str, re
 		return;
 	}
 
-	let mut request_origins = REQUEST_ORIGINS.lock().await;
-
-	if !request_origins.contains_key(request_id) {
+	if !REQUEST_ORIGINS.contains_key(request_id) {
 		// If the given requestId does not contain an origin,
 		// drop the packet entirely
 		logger::error(&format!("The function response with requestId '{}' does not contain an origin. The response might be malformed. Please ensure the function response has the same requestId as the function call", request_id));
@@ -461,9 +443,10 @@ async fn handle_function_response(module_comm: &ModuleComm, request_id: &str, re
 	}
 
 	// This requestId has completed its round-trip. Remove it from request_origins so that we can add the same one later on
-	let origin_module_id = request_origins.remove(request_id).unwrap();
+	let origin_module_id = REQUEST_ORIGINS.remove_take(request_id).unwrap();
+	let origin_module_id = origin_module_id.value();
 
-	if !registered_modules.contains_key(&origin_module_id) {
+	if !REQUEST_ORIGINS.contains_key(origin_module_id) {
 		// The origin module has probably disconnected.
 		// Drop the packet entirely
 		logger::debug(&format!("The function response meant for module '{}' is not registered (is the module still connected?). This packet will be ignored.", origin_module_id));
@@ -474,7 +457,11 @@ async fn handle_function_response(module_comm: &ModuleComm, request_id: &str, re
 		"Sending response from module '{}' to caller module '{}'...",
 		module_id, origin_module_id
 	));
-	send_module(registered_modules.get(&origin_module_id).unwrap(), request).await;
+	send_module(
+		REGISTERED_MODULES.get(origin_module_id).unwrap().value(),
+		request,
+	)
+	.await;
 	logger::verbose("Function response to origin module successfully sent.");
 }
 
@@ -489,15 +476,14 @@ async fn handle_register_hook(module_comm: &ModuleComm, request_id: &str, reques
 	}
 	let module_id = module_id.unwrap();
 
-	let mut registered_modules = REGISTERED_MODULES.lock().await;
-
-	let module = registered_modules.get_mut(&module_id);
+	let module = REGISTERED_MODULES.get(&module_id);
 	if module.is_none() {
 		logger::debug("This module is not registered. Sending error...");
 		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
 		return;
 	}
 	let module = module.unwrap();
+	let module = module.value();
 
 	let hook = request[request_keys::HOOK].as_str();
 	if hook == None {
@@ -512,18 +498,22 @@ async fn handle_register_hook(module_comm: &ModuleComm, request_id: &str, reques
 		module_id, hook
 	));
 
-	if !module.is_hook_registered(&hook) {
-		logger::verbose(&format!(
-			"The hook '{}' is not registered. Registering hook...",
-			hook
-		));
-		module.register_hook(hook);
-	} else {
-		logger::debug(&format!(
-			"The hook '{}' is already registered. No need to register again.",
-			hook
-		));
-	}
+	REGISTERED_MODULES.update(&module_id, |module_id, module| {
+		let mut module = module.clone();
+		if !module.is_hook_registered(&hook) {
+			logger::verbose(&format!(
+				"The hook '{}' is not registered. Registering hook...",
+				hook
+			));
+			module.register_hook(hook.clone());
+		} else {
+			logger::debug(&format!(
+				"The hook '{}' is already registered. No need to register again.",
+				hook
+			));
+		}
+		module
+	});
 
 	logger::verbose("Hook registered. Sending success response to module...");
 	send_module(
@@ -549,16 +539,13 @@ async fn handle_trigger_hook(module_comm: &ModuleComm, request_id: &str, request
 	}
 	let module_id = module_id.unwrap();
 
-	let registered_modules = REGISTERED_MODULES.lock().await;
-
-	let module = registered_modules.get(&module_id);
+	let module = REGISTERED_MODULES.get(&module_id);
 	if module.is_none() {
 		logger::debug("This module is not registered. Sending error...");
 		send_error(module_comm, request_id, errors::UNREGISTERED_MODULE).await;
 		return;
 	}
 	let module = module.unwrap().clone();
-	drop(registered_modules);
 
 	let hook = request[request_keys::HOOK].as_str();
 	if hook == None {
@@ -616,28 +603,23 @@ pub async fn on_module_disconnected(module_comm: &ModuleComm) {
 		module_id
 	));
 
-	let mut registered_modules = REGISTERED_MODULES.lock().await;
-	let mut unregistered_modules = UNREGISTERED_MODULES.lock().await;
-
-	if registered_modules.contains_key(&module_id) {
+	if REGISTERED_MODULES.contains_key(&module_id) {
 		logger::verbose("Module is a registered module. Removing...");
-		registered_modules
-			.remove(&module_id)
+		REGISTERED_MODULES
+			.remove_take(&module_id)
 			.unwrap()
 			.close_sender()
 			.await;
 		logger::verbose("Module removed from registered modules");
-	} else if unregistered_modules.contains_key(&module_id) {
+	} else if UNREGISTERED_MODULES.contains_key(&module_id) {
 		logger::verbose("Module is an registered module. Removing...");
-		unregistered_modules
-			.remove(&module_id)
+		UNREGISTERED_MODULES
+			.remove_take(&module_id)
 			.unwrap()
 			.close_sender()
 			.await;
 		logger::verbose("Module removed from unregistered modules");
 	}
-	drop(registered_modules);
-	drop(unregistered_modules);
 	logger::info(&format!("Module '{}' disconnected.", module_id));
 
 	recalculate_all_module_dependencies().await;
@@ -645,7 +627,7 @@ pub async fn on_module_disconnected(module_comm: &ModuleComm) {
 }
 
 pub async fn is_uuid_exists(uuid: &u128) -> bool {
-	MODULE_UUID_TO_ID.lock().await.contains_key(uuid)
+	MODULE_UUID_TO_ID.contains_key(uuid)
 }
 
 async fn trigger_hook(
@@ -661,14 +643,15 @@ async fn trigger_hook(
 	let hook_name = module_id.clone() + "." + hook;
 
 	logger::verbose("Iterating all registered modules to send hook to...");
-	for registered_module in REGISTERED_MODULES.lock().await.values() {
+	for registered_module in REGISTERED_MODULES.iter() {
 		if force {
 			logger::verbose(&format!(
 				"Hook is being forced onto module '{}'...",
-				registered_module.get_module_id()
+				registered_module.value().get_module_id()
 			));
+			let module = registered_module.value().clone();
 			send_module(
-				registered_module,
+				&module,
 				&json!({
 					request_keys::REQUEST_ID: generate_request_id().await,
 					request_keys::TYPE: request_types::TRIGGER_HOOK_RESPONSE,
@@ -682,8 +665,9 @@ async fn trigger_hook(
 				"Module '{}' is listening for this hook. Sending hook to module...",
 				registered_module.get_module_id()
 			));
+			let module = registered_module.value().clone();
 			send_module(
-				registered_module,
+				&module,
 				&json!({
 					request_keys::REQUEST_ID: generate_request_id().await,
 					request_keys::TYPE: request_types::TRIGGER_HOOK_RESPONSE,
@@ -695,7 +679,7 @@ async fn trigger_hook(
 		} else {
 			logger::verbose(&format!(
 				"Module '{}' is not listening for this hook. Hook is not being sent to module",
-				registered_module.get_module_id()
+				registered_module.value().get_module_id()
 			));
 		}
 	}
@@ -759,38 +743,37 @@ async fn recalculate_all_module_dependencies() {
 	// List of all modules whose dependencies weren't satisfied earlier but are satisfied now
 	let mut satisfied_modules: Vec<String> = vec![];
 
-	let mut registered_modules = REGISTERED_MODULES.lock().await;
-	let mut unregistered_modules = UNREGISTERED_MODULES.lock().await;
-
 	logger::verbose("Checking if any unregistered modules are satisfied...");
 	// recheck the dependencies for each unregistered module
-	for (module_id, module) in unregistered_modules.iter() {
+	for tuple in UNREGISTERED_MODULES.iter() {
+		let module = tuple.value();
+		let module_id = tuple.key();
 		// For each module, check if the dependencies are satisfied
 		let mut dependency_satisfied = true;
 
 		logger::verbose(&format!("Checking dependencies for module '{}'", module_id));
 		for (dependency, version_req) in module.get_dependencies() {
-			if registered_modules.contains_key(dependency) {
-				if !version_req.matches(&registered_modules.get(dependency).unwrap().get_version())
+			if REGISTERED_MODULES.contains_key(dependency) {
+				if !version_req.matches(&REGISTERED_MODULES.get(dependency).unwrap().value().get_version())
 				{
 					logger::debug(&format!(
 						"Dependency '{}' is incompatible. Required '{}', present '{}'",
 						dependency,
 						version_req.to_string(),
-						registered_modules.get(dependency).unwrap().get_version()
+						REGISTERED_MODULES.get(dependency).unwrap().value().get_version()
 					));
 					dependency_satisfied = false;
 					break;
 				}
-			} else if unregistered_modules.contains_key(dependency) {
+			} else if UNREGISTERED_MODULES.contains_key(dependency) {
 				if !version_req
-					.matches(&unregistered_modules.get(dependency).unwrap().get_version())
+					.matches(&UNREGISTERED_MODULES.get(dependency).unwrap().get_version())
 				{
 					logger::debug(&format!(
 						"Dependency '{}' is incompatible. Required '{}', present '{}'",
 						dependency,
 						version_req.to_string(),
-						registered_modules.get(dependency).unwrap().get_version()
+						REGISTERED_MODULES.get(dependency).unwrap().value().get_version()
 					));
 					dependency_satisfied = false;
 					break;
@@ -821,7 +804,8 @@ async fn recalculate_all_module_dependencies() {
 			"Module {} is now satisfied. Registering...",
 			module_id
 		));
-		let mut module = unregistered_modules.remove(module_id).unwrap();
+		let module = UNREGISTERED_MODULES.remove_take(module_id).unwrap();
+		let mut module = module.value().clone();
 		module.set_registered(true);
 
 		logger::verbose("Sending ACTIVATED trigger to module...");
@@ -836,18 +820,15 @@ async fn recalculate_all_module_dependencies() {
 		logger::verbose("ACTIVATED trigger sent.");
 
 		logger::verbose("Adding module to registered_modules...");
-		registered_modules.insert(module_id.clone(), module);
+		REGISTERED_MODULES.insert(module_id.clone(), module);
 		logger::verbose("Module registered");
 	}
 	logger::verbose("All newly satisfied modules registered");
-	drop(registered_modules);
-	drop(unregistered_modules);
 
 	let juno_module = REGISTERED_MODULES
-		.lock()
-		.await
 		.get(constants::APP_NAME)
 		.unwrap()
+		.value()
 		.clone();
 	logger::verbose("Notifying all modules of activated modules...");
 	for module_id in satisfied_modules {
@@ -864,28 +845,27 @@ async fn recalculate_all_module_dependencies() {
 	}
 	logger::verbose("All modules notified of activated modules");
 
-	let mut registered_modules = REGISTERED_MODULES.lock().await;
-	let mut unregistered_modules = UNREGISTERED_MODULES.lock().await;
-
 	// List of all modules whose dependencies were satisfied but aren't now
 	let mut unsatisfied_modules: Vec<String> = vec![];
 
 	logger::verbose("Checking if any registered modules are no longer satisfied...");
 	// remove modules whose dependencies are no longer satisfied
-	for (module_id, module) in registered_modules.iter() {
+	for tuple in REGISTERED_MODULES.iter() {
+		let module = tuple.value();
+		let module_id = tuple.key();
 		// For each module, check if the dependencies are satisfied
 		let mut dependency_satisfied = true;
 
 		logger::verbose(&format!("Checking dependencies for module '{}'", module_id));
 		for (dependency, version_req) in module.get_dependencies() {
-			if registered_modules.contains_key(dependency) {
-				if !version_req.matches(&registered_modules.get(dependency).unwrap().get_version())
+			if REGISTERED_MODULES.contains_key(dependency) {
+				if !version_req.matches(&REGISTERED_MODULES.get(dependency).unwrap().get_version())
 				{
 					logger::debug(&format!(
 						"Dependency '{}' is incompatible. Required '{}', present '{}'",
 						dependency,
 						version_req.to_string(),
-						registered_modules.get(dependency).unwrap().get_version()
+						REGISTERED_MODULES.get(dependency).unwrap().get_version()
 					));
 					dependency_satisfied = false;
 					break;
@@ -916,7 +896,8 @@ async fn recalculate_all_module_dependencies() {
 			"Module {} is no longer satisfied. Unregistering...",
 			module_id
 		));
-		let mut module = registered_modules.remove(module_id).unwrap();
+		let module = REGISTERED_MODULES.remove_take(module_id).unwrap();
+		let mut module = module.value().clone();
 		module.set_registered(false);
 
 		logger::verbose("Sending DEACTIVATED trigger to module...");
@@ -931,12 +912,10 @@ async fn recalculate_all_module_dependencies() {
 		logger::verbose("DEACTIVATED trigger sent");
 
 		logger::verbose("Adding module to unregistered_modules...");
-		unregistered_modules.insert(module_id.clone(), module);
+		UNREGISTERED_MODULES.insert(module_id.clone(), module.clone());
 		logger::verbose("Module unregistered");
 	}
 	logger::verbose("All module whose dependencies are no longer satisfied are unregistered");
-	drop(registered_modules);
-	drop(unregistered_modules);
 
 	logger::verbose("Notifying all modules of deactivated modules...");
 	for module_id in unsatisfied_modules {
@@ -983,9 +962,8 @@ fn is_function_name(name: &str) -> Option<(String, String)> {
 }
 
 async fn get_module_id_for_uuid(module_uuid: &u128) -> Option<String> {
-	let module_uuid_to_id = MODULE_UUID_TO_ID.lock().await;
-	let module_id = module_uuid_to_id.get(module_uuid)?;
-	Some(module_id.clone())
+	let module_id = MODULE_UUID_TO_ID.get(module_uuid)?;
+	Some(module_id.value().clone())
 }
 
 async fn generate_request_id() -> String {

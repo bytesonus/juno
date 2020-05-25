@@ -9,6 +9,7 @@ extern crate fslock;
 extern crate juno;
 extern crate rand;
 extern crate semver;
+extern crate dashmap;
 
 mod models;
 mod service;

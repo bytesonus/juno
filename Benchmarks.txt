@@ -1,0 +1,15 @@
+Benchmark 1: Mutex, debug
+./benchmark -s 127.0.0.1:4000 -c 10 -r 100 -t 1m
+Current Latency: 116.367841ms       Average Latency: 6510 µs
+
+Benchmark 2: Mutex, release
+./benchmark -s 127.0.0.1:4000 -c 10 -r 100 -t 1m
+Current Latency: 241.075µs    	    Average Latency: 14 µs
+
+Benchmark 3: RwLock, debug
+./benchmark -s 127.0.0.1:4000 -c 10 -r 100 -t 1m
+Current Latency: 116.846243ms       Average Latency: 10147 µs
+
+Benchmark 4: RwLock, release
+./benchmark -s 127.0.0.1:4000 -c 10 -r 100 -t 1m
+Current Latency: 175.866µs     	    Average Latency: 13 µs
