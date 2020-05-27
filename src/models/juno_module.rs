@@ -1,6 +1,5 @@
 use crate::{constants, models::Module, service::data_handler};
-use juno::models::Value;
-use juno::JunoModuleImpl;
+use juno::{models::Value, JunoModuleImpl};
 
 use std::{collections::HashMap, sync::Arc};
 
