@@ -1,11 +1,15 @@
 use crate::{constants, models::Module, service::data_handler};
 use juno::models::Value;
+use juno::JunoModuleImpl;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use async_std::task;
 use async_trait::async_trait;
-use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use futures::{
+	channel::mpsc::{UnboundedReceiver, UnboundedSender},
+	StreamExt,
+};
 use futures_util::sink::SinkExt;
 use juno::{
 	connection::{BaseConnection, Buffer},
@@ -17,6 +21,7 @@ pub(crate) struct DirectConnection {
 	connection_setup: bool,
 	read_data_receiver: Option<UnboundedReceiver<Buffer>>,
 	write_data_sender: UnboundedSender<Buffer>,
+	on_data_handler: Option<Arc<JunoModuleImpl>>,
 }
 
 impl DirectConnection {
@@ -28,6 +33,7 @@ impl DirectConnection {
 			connection_setup: false,
 			read_data_receiver: Some(read_data_receiver),
 			write_data_sender,
+			on_data_handler: None,
 		}
 	}
 }
@@ -35,42 +41,58 @@ impl DirectConnection {
 #[async_trait]
 impl BaseConnection for DirectConnection {
 	async fn setup_connection(&mut self) -> Result<(), Error> {
-		if self.connection_setup {
-			panic!("Cannot call setup_connection() more than once!");
+		if self.connection_setup || self.read_data_receiver.is_none() {
+			return Err(Error::Internal(String::from(
+				"Cannot call setup_connection() more than once!",
+			)));
 		}
+
+		if self.on_data_handler.is_none() {
+			return Err(Error::Internal(String::from(
+				"On data handler cannot be empty!",
+			)));
+		}
+
+		let mut read_data_receiver = self.read_data_receiver.take().unwrap();
+		let on_data_handler = self.on_data_handler.as_ref().unwrap().clone();
+
+		task::spawn(async move {
+			while let Some(data) = read_data_receiver.next().await {
+				let juno_impl = on_data_handler.clone();
+				task::spawn(async move {
+					juno_impl.on_data(data).await;
+				});
+			}
+		});
 
 		self.connection_setup = true;
 		Ok(())
 	}
 
-	async fn close_connection(&mut self) {
+	async fn close_connection(&mut self) -> Result<(), Error> {
 		if !self.connection_setup {
 			panic!("Cannot close a connection that hasn't been established yet. Did you forget to call setup_connection()?");
 		}
+		Ok(())
 	}
 
-	async fn send(&mut self, buffer: Buffer) {
+	async fn send(&mut self, buffer: Buffer) -> Result<(), Error> {
 		if !self.connection_setup {
 			panic!("Cannot send data to a connection that hasn't been established yet. Did you forget to await the call to setup_connection()?");
 		}
-		let mut sender = &self.write_data_sender.clone();
-		if let Err(err) = sender.send(buffer).await {
-			println!("Error attempting to send data to connection: {}", err);
+		if buffer.is_empty() {
+			return Ok(());
 		}
+		self.write_data_sender.send(buffer).await.unwrap();
+		Ok(())
 	}
 
-	fn get_data_receiver(&mut self) -> UnboundedReceiver<Buffer> {
-		if !self.connection_setup {
-			panic!("Cannot get read sender to a connection that hasn't been established yet. Did you forget to await the call to setup_connection()?");
-		}
-		self.read_data_receiver.take().unwrap()
+	fn set_data_listener(&mut self, listener: Arc<JunoModuleImpl>) {
+		self.on_data_handler = Some(listener);
 	}
 
-	fn clone_write_sender(&self) -> UnboundedSender<Buffer> {
-		if !self.connection_setup {
-			panic!("Cannot get write sender of a connection that hasn't been established yet. Did you forget to await the call to setup_connection()?");
-		}
-		self.write_data_sender.clone()
+	fn get_data_listener(&self) -> &Option<Arc<JunoModuleImpl>> {
+		&self.on_data_handler
 	}
 }
 
