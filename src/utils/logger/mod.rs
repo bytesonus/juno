@@ -1,7 +1,7 @@
 pub mod console_logger;
 
 use console_logger::ConsoleLogger;
-use std::sync::Mutex;
+use std::sync::RwLock;
 
 #[derive(Clone, Copy)]
 pub enum LogLevel {
@@ -49,30 +49,30 @@ trait Logger {
 }
 
 lazy_static! {
-	static ref DEFAULT_LOGGER: Mutex<ConsoleLogger> =
-		Mutex::new(ConsoleLogger::new(LogLevel::Verbose));
+	static ref DEFAULT_LOGGER: RwLock<ConsoleLogger> =
+		RwLock::new(ConsoleLogger::new(LogLevel::Verbose));
 }
 
 pub fn verbose(data: &str) {
-	DEFAULT_LOGGER.lock().unwrap().verbose(data);
+	DEFAULT_LOGGER.read().unwrap().verbose(data);
 }
 
 pub fn info(data: &str) {
-	DEFAULT_LOGGER.lock().unwrap().info(data);
+	DEFAULT_LOGGER.read().unwrap().info(data);
 }
 
 pub fn debug(data: &str) {
-	DEFAULT_LOGGER.lock().unwrap().debug(data);
+	DEFAULT_LOGGER.read().unwrap().debug(data);
 }
 
 pub fn warn(data: &str) {
-	DEFAULT_LOGGER.lock().unwrap().warn(data);
+	DEFAULT_LOGGER.read().unwrap().warn(data);
 }
 
 pub fn error(data: &str) {
-	DEFAULT_LOGGER.lock().unwrap().error(data);
+	DEFAULT_LOGGER.read().unwrap().error(data);
 }
 
 pub fn set_verbosity(log_level: LogLevel) {
-	DEFAULT_LOGGER.lock().unwrap().set_verbosity(log_level);
+	DEFAULT_LOGGER.write().unwrap().set_verbosity(log_level);
 }

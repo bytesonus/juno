@@ -1,3 +1,4 @@
+pub mod juno_module;
 pub mod module;
 pub mod module_comm;
 
