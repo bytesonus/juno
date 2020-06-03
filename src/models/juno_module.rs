@@ -161,7 +161,10 @@ fn get_object_from_module(module: Module) -> Value {
 		let mut map = HashMap::new();
 
 		map.insert(String::from("moduleId"), Value::String(module_id));
-		map.insert(String::from("connectionId"), Value::String(format!("{}", module_uuid)));
+		map.insert(
+			String::from("connectionId"),
+			Value::String(format!("{}", module_uuid)),
+		);
 		map.insert(String::from("version"), Value::String(version.to_string()));
 		map.insert(
 			String::from("dependencies"),

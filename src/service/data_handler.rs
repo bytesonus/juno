@@ -645,7 +645,10 @@ pub async fn on_module_disconnected(module_comm: &ModuleComm) {
 	recalculate_all_module_dependencies().await;
 
 	// Trigger a hook about the module being disconnected
-	logger::verbose(&format!("Triggerring hook about connectionId '{}' disconnection", module_comm.get_uuid()));
+	logger::verbose(&format!(
+		"Triggerring hook about connectionId '{}' disconnection",
+		module_comm.get_uuid()
+	));
 	trigger_hook(
 		&REGISTERED_MODULES
 			.read()
@@ -674,7 +677,10 @@ pub async fn new_connection_id() -> u128 {
 	}
 
 	// Trigger a hook about the module being connected
-	logger::verbose(&format!("Triggerring hook about new connectionId '{}' generation", uuid));
+	logger::verbose(&format!(
+		"Triggerring hook about new connectionId '{}' generation",
+		uuid
+	));
 	trigger_hook(
 		&REGISTERED_MODULES
 			.read()

@@ -32,49 +32,47 @@ lazy_static! {
 #[allow(clippy::collapsible_if)]
 #[async_std::main]
 async fn main() {
-	let args = App::new(constants::APP_NAME)
-		.version(constants::APP_VERSION)
-		.author(constants::APP_AUTHORS)
-		.about("Micro-services framework")
-		.arg(
-			Arg::with_name("socket-location")
-				.conflicts_with("port")
-				.short("s")
-				.long("socket-location")
-				.takes_value(true)
-				.value_name("FILE")
-				.help("Sets the location of the socket to be created"),
-		)
-		.arg(
-			Arg::with_name("port")
-				.conflicts_with("socket-location")
-				.short("p")
-				.long("port")
-				.takes_value(true)
-				.value_name("PORT")
-				.help("Sets the port for the socket to listen to"),
-		)
-		.arg(
-			Arg::with_name("bind-addr")
-				.conflicts_with("socket-location")
-				.long("bind-addr")
-				.takes_value(true)
-				.value_name("BIND-ADDR")
-				.help("Sets the binding address for the socket to listen to"),
-		)
-		.arg(
-			Arg::with_name("V")
-				.short("V")
-				.multiple(true)
-				.help("Sets the level of verbosity (max 3). Eg: -VVV for the highest logging level"),
-		)
-		.arg(
-			Arg::with_name("version")
-				.short("v")
-				.long("version")
-				.help("Prints version information"),
-		)
-		.get_matches();
+	let args =
+		App::new(constants::APP_NAME)
+			.version(constants::APP_VERSION)
+			.author(constants::APP_AUTHORS)
+			.about("Micro-services framework")
+			.arg(
+				Arg::with_name("socket-location")
+					.conflicts_with("port")
+					.short("s")
+					.long("socket-location")
+					.takes_value(true)
+					.value_name("FILE")
+					.help("Sets the location of the socket to be created"),
+			)
+			.arg(
+				Arg::with_name("port")
+					.conflicts_with("socket-location")
+					.short("p")
+					.long("port")
+					.takes_value(true)
+					.value_name("PORT")
+					.help("Sets the port for the socket to listen to"),
+			)
+			.arg(
+				Arg::with_name("bind-addr")
+					.conflicts_with("socket-location")
+					.long("bind-addr")
+					.takes_value(true)
+					.value_name("BIND-ADDR")
+					.help("Sets the binding address for the socket to listen to"),
+			)
+			.arg(Arg::with_name("V").short("V").multiple(true).help(
+				"Sets the level of verbosity (max 3). Eg: -VVV for the highest logging level",
+			))
+			.arg(
+				Arg::with_name("version")
+					.short("v")
+					.long("version")
+					.help("Prints version information"),
+			)
+			.get_matches();
 
 	if args.is_present("version") {
 		println!("{}", constants::APP_VERSION);
