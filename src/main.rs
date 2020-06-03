@@ -36,7 +36,7 @@ async fn main() {
 		App::new(constants::APP_NAME)
 			.version(constants::APP_VERSION)
 			.author(constants::APP_AUTHORS)
-			.about("Micro-services framework")
+			.about(constants::APP_DESCRIPTION)
 			.arg(
 				Arg::with_name("socket-location")
 					.conflicts_with("port")

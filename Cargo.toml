@@ -3,6 +3,7 @@ name = "juno"
 version = "0.1.3"
 authors = ["Rakshith Ravi <rakshith.ravi@gmx.com>"]
 edition = "2018"
+description = "Minimalistic, unpoinionated micro-services framework"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

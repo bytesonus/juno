@@ -1,8 +1,9 @@
-use clap::{crate_authors, crate_name, crate_version};
+use clap::{crate_authors, crate_name, crate_version, crate_description};
 
 pub const APP_NAME: &str = crate_name!();
 pub const APP_VERSION: &str = crate_version!();
 pub const APP_AUTHORS: &str = crate_authors!();
+pub const APP_DESCRIPTION: &str = crate_description!();
 
 pub const DEFAULT_SOCKET_LOCATION: &str = "../juno.sock";
 
