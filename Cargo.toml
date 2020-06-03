@@ -7,19 +7,19 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = "2.33.0"
-lazy_static = "1.4.0"
-serde_json = "1.0"
-futures = "0.3.1"
-futures-util = "0.3.1"
-rand = "0.7.2"
-ctrlc = "3.1.3"
-semver = "0.10"
-colored = "1.9.1"
-fslock = "0.1.6"
-async-std = { version = "1.5.0", features = ["attributes"] }
+clap = "*"
+lazy_static = "*"
+serde_json = "*"
+futures = "*"
+futures-util = "*"
+rand = "*"
+ctrlc = "*"
+semver = "*"
+colored = "*"
+fslock = "*"
+async-std = { version = "*", features = ["attributes"] }
 juno = "0.1.4-beta"
-async-trait = "0.1.30"
+async-trait = "*"
 
 [profile.release]
 lto = true
