@@ -66,7 +66,7 @@ async fn main() {
 			Arg::with_name("V")
 				.short("V")
 				.multiple(true)
-				.help("Sets the level of verbosity (max 3)"),
+				.help("Sets the level of verbosity (max 3). Eg: -VVV for the highest logging level"),
 		)
 		.arg(
 			Arg::with_name("version")
