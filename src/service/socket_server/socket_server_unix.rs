@@ -21,8 +21,6 @@ use futures::{
 };
 use futures_util::sink::SinkExt;
 
-use rand::{thread_rng, Rng};
-
 lazy_static! {
 	static ref CLOSE_LISTENER: Mutex<Option<UnboundedSender<()>>> = Mutex::new(None);
 }
@@ -90,10 +88,7 @@ async fn handle_unix_socket_client(stream: Result<UnixStream>) {
 	let (sender, mut receiver) = unbounded::<String>();
 	logger::verbose("New MPSC channel created");
 
-	let mut uuid: u128 = thread_rng().gen();
-	while uuid == 0 || data_handler::is_uuid_exists(&uuid).await {
-		uuid = thread_rng().gen();
-	}
+	let uuid = data_handler::new_connection_id().await;
 	logger::info(&format!("New connection assigned ID {}", uuid));
 	let module_comm = ModuleComm::new_unix_comm(uuid, stream, sender);
 

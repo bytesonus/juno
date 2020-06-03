@@ -18,6 +18,7 @@ pub mod request_keys {
 	pub const ARGUMENTS: &str = "arguments";
 	pub const DATA: &str = "data";
 	pub const CALLER: &str = "caller";
+	pub const CONNECTION_ID: &str = "connectionId";
 }
 
 pub mod juno_hooks {
@@ -25,6 +26,8 @@ pub mod juno_hooks {
 	pub const DEACTIVATED: &str = "deactivated";
 	pub const MODULE_ACTIVATED: &str = "moduleActivated";
 	pub const MODULE_DEACTIVATED: &str = "moduleDeactivated";
+	pub const MODULE_CONNECTED: &str = "moduleConnected";
+	pub const MODULE_DISCONNECTED: &str = "moduleDisconnected";
 }
 
 pub mod request_types {

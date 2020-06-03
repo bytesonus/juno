@@ -6,16 +6,15 @@ use crate::{
 	},
 };
 
+use async_std::sync::RwLock;
 use std::{
 	collections::HashMap,
 	time::{SystemTime, UNIX_EPOCH},
 };
 
-use async_std::sync::RwLock;
-
-use serde_json::{json, Map, Value};
-
+use rand::{thread_rng, Rng};
 use semver::{Version, VersionReq};
+use serde_json::{json, Map, Value};
 
 lazy_static! {
 	static ref REGISTERED_MODULES: RwLock<HashMap<String, Module>> = RwLock::new(HashMap::new());
@@ -644,11 +643,55 @@ pub async fn on_module_disconnected(module_comm: &ModuleComm) {
 	logger::info(&format!("Module '{}' disconnected.", module_id));
 
 	recalculate_all_module_dependencies().await;
+
+	// Trigger a hook about the module being disconnected
+	logger::verbose(&format!("Triggerring hook about connectionId '{}' disconnection", module_comm.get_uuid()));
+	trigger_hook(
+		&REGISTERED_MODULES
+			.read()
+			.await
+			.get(constants::APP_NAME)
+			.unwrap()
+			.clone(),
+		constants::juno_hooks::MODULE_DISCONNECTED,
+		json!({ request_keys::CONNECTION_ID: module_comm.get_uuid() })
+			.as_object()
+			.unwrap(),
+		false,
+		false,
+	)
+	.await;
+
 	logger::verbose("Module is no longer tracked");
 }
 
-pub async fn is_uuid_exists(uuid: &u128) -> bool {
-	MODULE_UUID_TO_ID.read().await.contains_key(uuid)
+pub async fn new_connection_id() -> u128 {
+	let mut uuid = thread_rng().gen();
+
+	// If the UUID already exists, generate a new one
+	while uuid == 0 || MODULE_UUID_TO_ID.read().await.contains_key(&uuid) {
+		uuid = thread_rng().gen();
+	}
+
+	// Trigger a hook about the module being connected
+	logger::verbose(&format!("Triggerring hook about new connectionId '{}' generation", uuid));
+	trigger_hook(
+		&REGISTERED_MODULES
+			.read()
+			.await
+			.get(constants::APP_NAME)
+			.unwrap()
+			.clone(),
+		constants::juno_hooks::MODULE_CONNECTED,
+		json!({ request_keys::CONNECTION_ID: uuid })
+			.as_object()
+			.unwrap(),
+		false,
+		false,
+	)
+	.await;
+
+	uuid
 }
 
 async fn trigger_hook(

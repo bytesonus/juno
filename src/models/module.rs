@@ -16,7 +16,7 @@ lazy_static! {
 // These are public so that they can be destructed someplace else to avoid cloning
 pub struct Module {
 	pub(crate) registered: bool,
-	module_uuid: u128,
+	pub(crate) module_uuid: u128,
 	pub(crate) module_id: String,
 	pub(crate) version: Version,
 	pub(crate) dependencies: HashMap<String, VersionReq>,
