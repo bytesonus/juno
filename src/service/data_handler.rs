@@ -409,7 +409,7 @@ async fn handle_function_call(module_comm: &ModuleComm, request_id: &str, reques
 		}
 	} else {
 		logger::verbose("Registering the requestId along with it's origin module.");
-		request_origins.insert(request_id_heap, module_id);
+		request_origins.insert(request_id_heap, module_id.clone());
 	}
 	drop(request_origins);
 
@@ -422,6 +422,9 @@ async fn handle_function_call(module_comm: &ModuleComm, request_id: &str, reques
 
 	logger::verbose("Changing the value of function from 'module-name.function_name' to just 'function_name' in the request");
 	response[request_keys::FUNCTION] = Value::String(function_name);
+
+	logger::verbose("Setting the caller of the function call...");
+	response[request_keys::CALLER] = Value::String(module_id);
 
 	logger::verbose("Proxying the request to the relevant module...");
 	send_module(receiver_module, &response).await;

@@ -17,6 +17,7 @@ pub mod request_keys {
 	pub const HOOK: &str = "hook";
 	pub const ARGUMENTS: &str = "arguments";
 	pub const DATA: &str = "data";
+	pub const CALLER: &str = "caller";
 }
 
 pub mod juno_hooks {
