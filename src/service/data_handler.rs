@@ -123,6 +123,107 @@ pub async fn get_module_by_id(module_id: &str) -> Option<Module> {
 	None
 }
 
+pub async fn on_module_disconnected(module_comm: &ModuleComm) {
+	logger::verbose(&format!(
+		"Module with UUID {} disconnected. Processing...",
+		module_comm.get_uuid()
+	));
+	// recheck dependencies
+	let module_id = get_module_id_for_uuid(&module_comm.get_uuid()).await;
+
+	if module_id.is_none() {
+		logger::verbose("Module does not have a moduleId. No more processing required");
+		return;
+	}
+	let module_id = module_id.unwrap();
+	logger::verbose(&format!(
+		"Module is associated with moduleId '{}'",
+		module_id
+	));
+
+	let mut registered_modules = REGISTERED_MODULES.write().await;
+	let mut unregistered_modules = UNREGISTERED_MODULES.write().await;
+
+	if registered_modules.contains_key(&module_id) {
+		logger::verbose("Module is a registered module. Removing...");
+		registered_modules
+			.remove(&module_id)
+			.unwrap()
+			.close_sender()
+			.await;
+		logger::verbose("Module removed from registered modules");
+	} else if unregistered_modules.contains_key(&module_id) {
+		logger::verbose("Module is an registered module. Removing...");
+		unregistered_modules
+			.remove(&module_id)
+			.unwrap()
+			.close_sender()
+			.await;
+		logger::verbose("Module removed from unregistered modules");
+	}
+	drop(registered_modules);
+	drop(unregistered_modules);
+	logger::info(&format!("Module '{}' disconnected.", module_id));
+
+	recalculate_all_module_dependencies().await;
+
+	// Trigger a hook about the module being disconnected
+	logger::verbose(&format!(
+		"Triggerring hook about connectionId '{}' disconnection",
+		module_comm.get_uuid()
+	));
+	trigger_hook(
+		&REGISTERED_MODULES
+			.read()
+			.await
+			.get(constants::APP_NAME)
+			.unwrap()
+			.clone(),
+		constants::juno_hooks::MODULE_DISCONNECTED,
+		json!({ request_keys::CONNECTION_ID: module_comm.get_uuid() })
+			.as_object()
+			.unwrap(),
+		false,
+		false,
+	)
+	.await;
+
+	logger::verbose("Module is no longer tracked");
+}
+
+pub async fn new_connection_id() -> u128 {
+	let mut uuid = thread_rng().gen();
+
+	// If the UUID already exists, generate a new one
+	while uuid == 0 || MODULE_UUID_TO_ID.read().await.contains_key(&uuid) {
+		uuid = thread_rng().gen();
+	}
+
+	// Trigger a hook about the module being connected
+	logger::verbose(&format!(
+		"Triggerring hook about new connectionId '{}' generation",
+		uuid
+	));
+	let juno_module = REGISTERED_MODULES
+		.read()
+		.await
+		.get(constants::APP_NAME)
+		.unwrap()
+		.clone();
+	trigger_hook(
+		&juno_module,
+		constants::juno_hooks::MODULE_CONNECTED,
+		json!({ request_keys::CONNECTION_ID: uuid.to_string() })
+			.as_object()
+			.unwrap(),
+		false,
+		false,
+	)
+	.await;
+
+	uuid
+}
+
 async fn handle_module_registration(module_comm: &ModuleComm, request_id: &str, request: &Value) {
 	let module_id = request[request_keys::MODULE_ID].as_str();
 	let version = request[request_keys::VERSION].as_str();
@@ -598,106 +699,6 @@ async fn handle_trigger_hook(module_comm: &ModuleComm, request_id: &str, request
 	)
 	.await;
 	logger::verbose("Origin module has been notified of hook triggered");
-}
-
-pub async fn on_module_disconnected(module_comm: &ModuleComm) {
-	logger::verbose(&format!(
-		"Module with UUID {} disconnected. Processing...",
-		module_comm.get_uuid()
-	));
-	// recheck dependencies
-	let module_id = get_module_id_for_uuid(&module_comm.get_uuid()).await;
-
-	if module_id.is_none() {
-		logger::verbose("Module does not have a moduleId. No more processing required");
-		return;
-	}
-	let module_id = module_id.unwrap();
-	logger::verbose(&format!(
-		"Module is associated with moduleId '{}'",
-		module_id
-	));
-
-	let mut registered_modules = REGISTERED_MODULES.write().await;
-	let mut unregistered_modules = UNREGISTERED_MODULES.write().await;
-
-	if registered_modules.contains_key(&module_id) {
-		logger::verbose("Module is a registered module. Removing...");
-		registered_modules
-			.remove(&module_id)
-			.unwrap()
-			.close_sender()
-			.await;
-		logger::verbose("Module removed from registered modules");
-	} else if unregistered_modules.contains_key(&module_id) {
-		logger::verbose("Module is an registered module. Removing...");
-		unregistered_modules
-			.remove(&module_id)
-			.unwrap()
-			.close_sender()
-			.await;
-		logger::verbose("Module removed from unregistered modules");
-	}
-	drop(registered_modules);
-	drop(unregistered_modules);
-	logger::info(&format!("Module '{}' disconnected.", module_id));
-
-	recalculate_all_module_dependencies().await;
-
-	// Trigger a hook about the module being disconnected
-	logger::verbose(&format!(
-		"Triggerring hook about connectionId '{}' disconnection",
-		module_comm.get_uuid()
-	));
-	trigger_hook(
-		&REGISTERED_MODULES
-			.read()
-			.await
-			.get(constants::APP_NAME)
-			.unwrap()
-			.clone(),
-		constants::juno_hooks::MODULE_DISCONNECTED,
-		json!({ request_keys::CONNECTION_ID: module_comm.get_uuid() })
-			.as_object()
-			.unwrap(),
-		false,
-		false,
-	)
-	.await;
-
-	logger::verbose("Module is no longer tracked");
-}
-
-pub async fn new_connection_id() -> u128 {
-	let mut uuid = thread_rng().gen();
-
-	// If the UUID already exists, generate a new one
-	while uuid == 0 || MODULE_UUID_TO_ID.read().await.contains_key(&uuid) {
-		uuid = thread_rng().gen();
-	}
-
-	// Trigger a hook about the module being connected
-	logger::verbose(&format!(
-		"Triggerring hook about new connectionId '{}' generation",
-		uuid
-	));
-	trigger_hook(
-		&REGISTERED_MODULES
-			.read()
-			.await
-			.get(constants::APP_NAME)
-			.unwrap()
-			.clone(),
-		constants::juno_hooks::MODULE_CONNECTED,
-		json!({ request_keys::CONNECTION_ID: uuid })
-			.as_object()
-			.unwrap(),
-		false,
-		false,
-	)
-	.await;
-
-	uuid
 }
 
 async fn trigger_hook(
