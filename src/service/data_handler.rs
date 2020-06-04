@@ -180,7 +180,7 @@ pub async fn on_module_disconnected(module_comm: &ModuleComm) {
 			.unwrap()
 			.clone(),
 		constants::juno_hooks::MODULE_DISCONNECTED,
-		json!({ request_keys::CONNECTION_ID: module_comm.get_uuid() })
+		json!({ request_keys::CONNECTION_ID: module_comm.get_uuid().to_string() })
 			.as_object()
 			.unwrap(),
 		false,
