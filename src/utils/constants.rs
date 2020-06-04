@@ -1,4 +1,4 @@
-use clap::{crate_authors, crate_name, crate_version, crate_description};
+use clap::{crate_authors, crate_description, crate_name, crate_version};
 
 pub const APP_NAME: &str = crate_name!();
 pub const APP_VERSION: &str = crate_version!();
