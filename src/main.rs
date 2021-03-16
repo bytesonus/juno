@@ -1,36 +1,17 @@
-#[macro_use]
-extern crate lazy_static;
-extern crate async_std;
-extern crate async_trait;
-extern crate clap;
-extern crate colored;
-extern crate ctrlc;
-extern crate fslock;
-extern crate juno;
-extern crate rand;
-extern crate semver;
-
 mod models;
 mod service;
 mod utils;
 
-use std::{env::current_dir, sync::Mutex};
-
-use async_std::task;
+use std::env::current_dir;
 
 use clap::{App, Arg};
 
-use utils::{
-	constants,
-	logger::{self, LogLevel},
-};
+use log::LevelFilter;
+use simple_logger::SimpleLogger;
+use tokio::{signal, task};
+use utils::{constants, ConnectionType};
 
-lazy_static! {
-	static ref CONNECTION_TYPE: Mutex<u8> = Mutex::new(0);
-}
-
-#[allow(clippy::collapsible_if)]
-#[async_std::main]
+#[tokio::main]
 async fn main() {
 	let args =
 		App::new(constants::APP_NAME)
@@ -81,9 +62,11 @@ async fn main() {
 
 	let mut default_socket_location = current_dir().unwrap();
 	default_socket_location.push(constants::DEFAULT_SOCKET_LOCATION);
-	let default_socket_location = default_socket_location.as_os_str().to_str().unwrap();
+	let default_socket_location =
+		default_socket_location.as_os_str().to_str().unwrap();
 
-	let mut port = String::from(args.value_of("bind-addr").unwrap_or("127.0.0.1"));
+	let mut port =
+		String::from(args.value_of("bind-addr").unwrap_or("127.0.0.1"));
 	port.push(':');
 	port.push_str(args.value_of("port").unwrap_or("2203"));
 
@@ -92,65 +75,58 @@ async fn main() {
 			.unwrap_or(default_socket_location),
 	);
 
-	let verbosity = match args.occurrences_of("V") {
-		0 => LogLevel::Warn,
-		1 => LogLevel::Debug,
-		2 => LogLevel::Info,
-		_ => LogLevel::Verbose,
-	};
-	logger::set_verbosity(verbosity);
+	SimpleLogger::new()
+		.with_level(match args.occurrences_of("V") {
+			0 => LevelFilter::Warn,
+			1 => LevelFilter::Debug,
+			2 => LevelFilter::Info,
+			_ => LevelFilter::Trace,
+		})
+		.init()
+		.unwrap();
 
-	let mut connection_type = CONNECTION_TYPE.lock().unwrap();
-
+	let connection_type;
 	if cfg!(target_family = "windows") {
 		if args.value_of("socket-location").is_some() {
-			logger::error("Listening on unix sockets are not supported on windows");
+			log::error!(
+				"Listening on unix sockets are not supported on windows"
+			);
 			return;
 		} else {
-			*connection_type = constants::connection_types::INET_SOCKET;
+			connection_type = ConnectionType::UnixSocket;
 		}
 	} else {
 		if args.value_of("port").is_some() {
-			*connection_type = constants::connection_types::INET_SOCKET;
+			connection_type = ConnectionType::InetSocket;
 		} else {
-			*connection_type = constants::connection_types::UNIX_SOCKET;
+			connection_type = ConnectionType::UnixSocket;
 		}
 	}
 
-	if *connection_type == constants::connection_types::UNIX_SOCKET {
-		logger::info(&format!(
+	let exit_connection_type = connection_type.clone();
+	task::spawn(async move {
+		signal::ctrl_c()
+			.await
+			.expect("Unable to set Ctrl-C handler");
+		on_exit(exit_connection_type).await;
+	});
+
+	if connection_type == ConnectionType::UnixSocket {
+		log::info!(
 			"Starting {} on socket location {}",
 			constants::APP_NAME,
 			socket_location,
-		));
+		);
+	} else if connection_type == ConnectionType::InetSocket {
+		log::info!("Starting {} on port {}", constants::APP_NAME, port);
+	}
 
-		ctrlc::set_handler(move || task::block_on(on_exit()))
-			.expect("Unable to set Ctrl-C handler");
-		drop(connection_type);
-		if let Err(err) = service::start(&socket_location).await {
-			logger::error(&format!("Error creating socket: {}", err));
-		}
-	} else if *connection_type == constants::connection_types::INET_SOCKET {
-		logger::info(&format!(
-			"Starting {} on port {}",
-			constants::APP_NAME,
-			port,
-		));
-
-		ctrlc::set_handler(move || task::block_on(on_exit()))
-			.expect("Unable to set Ctrl-C handler");
-		drop(connection_type);
-		if let Err(err) = service::start(&port).await {
-			logger::error(&format!("Error opening socket: {}", err));
-		}
+	if let Err(err) = service::start(connection_type, &socket_location).await {
+		log::error!("Error creating socket: {}", err);
 	}
 }
 
-fn get_connection_type() -> u8 {
-	*CONNECTION_TYPE.lock().unwrap()
-}
-
-async fn on_exit() {
-	logger::warn("Recieved exit code. Initiating shutdown process");
-	service::on_exit().await;
+async fn on_exit(connection_type: ConnectionType) {
+	log::warn!("Recieved exit code. Initiating shutdown process");
+	service::on_exit(connection_type).await;
 }

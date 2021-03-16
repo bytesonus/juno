@@ -7,6 +7,7 @@ pub const APP_DESCRIPTION: &str = crate_description!();
 
 pub const DEFAULT_SOCKET_LOCATION: &str = "../juno.sock";
 
+#[allow(dead_code)]
 pub mod request_keys {
 	pub const TYPE: &str = "type";
 	pub const REQUEST_ID: &str = "requestId";
@@ -22,6 +23,7 @@ pub mod request_keys {
 	pub const CONNECTION_ID: &str = "connectionId";
 }
 
+#[allow(dead_code)]
 pub mod juno_hooks {
 	pub const ACTIVATED: &str = "activated";
 	pub const DEACTIVATED: &str = "deactivated";
@@ -60,9 +62,4 @@ pub mod errors {
 	pub const UNKNOWN_FUNCTION: u32 = 5;
 	pub const INVALID_MODULE_ID: u32 = 6;
 	pub const DUPLICATE_MODULE: u32 = 7;
-}
-
-pub mod connection_types {
-	pub const UNIX_SOCKET: u8 = 1;
-	pub const INET_SOCKET: u8 = 2;
 }

@@ -1,2 +1,7 @@
 pub mod constants;
-pub mod logger;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConnectionType {
+	UnixSocket,
+	InetSocket,
+}

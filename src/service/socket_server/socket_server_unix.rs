@@ -1,16 +1,10 @@
-use crate::{
-	models::{juno_module, ModuleComm},
-	service::data_handler,
-	utils::logger,
-};
-use juno::connection::Buffer;
+use crate::{models::ModuleComm, service::data_handler};
 
-use async_std::{
-	fs::remove_file,
-	io::Result,
-	os::unix::net::{UnixListener, UnixStream},
-	path::Path,
-	prelude::*,
+use lazy_static::lazy_static;
+use tokio::{
+	fs::{self, remove_file},
+	io::{AsyncWriteExt, Result},
+	net::{unix::SocketAddr, UnixListener, UnixStream},
 	sync::Mutex,
 	task,
 };
@@ -18,18 +12,19 @@ use async_std::{
 use futures::{
 	channel::mpsc::{unbounded, UnboundedSender},
 	future::{self, Either},
+	StreamExt,
 };
 use futures_util::sink::SinkExt;
 
 lazy_static! {
-	static ref CLOSE_LISTENER: Mutex<Option<UnboundedSender<()>>> = Mutex::new(None);
+	static ref CLOSE_LISTENER: Mutex<Option<UnboundedSender<()>>> =
+		Mutex::new(None);
 }
 
 pub async fn listen(socket_path: &str) -> Result<()> {
-	let socket_path = Path::new(socket_path);
 	// File lock is aquired. If the unix socket exists, then it's clearly a dangling socket. Feel free to delete it
-	if socket_path.exists().await {
-		logger::verbose("Removing existing unix socket");
+	if fs::metadata(socket_path).await.is_ok() {
+		log::trace!("Removing existing unix socket");
 		remove_file(socket_path).await?;
 	}
 
@@ -37,36 +32,42 @@ pub async fn listen(socket_path: &str) -> Result<()> {
 	CLOSE_LISTENER.lock().await.replace(sender);
 	let mut close_future = receiver.next();
 
-	let socket_server = UnixListener::bind(socket_path).await?;
-	let mut incoming = socket_server.incoming();
+	let socket_server = UnixListener::bind(socket_path)?;
 
-	// Setup juno module
-	let (read_data_sender, read_data_receiver) = unbounded::<Buffer>();
-	let (write_data_sender, write_data_receiver) = unbounded::<Buffer>();
-	task::spawn(async move {
-		let (sender, mut receiver) = unbounded::<String>();
-		let module_comm = ModuleComm::new_internal_comm(0, read_data_sender, sender);
+	// // Setup juno module
+	// let (read_data_sender, read_data_receiver) = unbounded::<Buffer>();
+	// let (write_data_sender, write_data_receiver) = unbounded::<Buffer>();
+	// task::spawn(async move {
+	// 	let (sender, mut receiver) = unbounded::<String>();
+	// 	let module_comm = ModuleComm::new_internal_comm(0, read_data_sender, sender);
 
-		let read_future = module_comm.internal_read_loop(write_data_receiver);
-		let write_future = module_comm.write_data_loop(&mut receiver);
+	// 	let read_future = module_comm.internal_read_loop(write_data_receiver);
+	// 	let write_future = module_comm.write_data_loop(&mut receiver, write_data_sender.clone());
 
-		future::join(read_future, write_future).await;
-		logger::verbose("Disconnecting internal modules...");
-	});
-	let module = juno_module::setup_juno_module(read_data_receiver, write_data_sender).await;
+	// 	future::join(read_future, write_future).await;
+	// 	log::trace!("Disconnecting internal modules...");
+	// });
+	// let module = juno_module::setup_juno_module(read_data_receiver, write_data_sender).await;
 
-	logger::verbose("Listening for socket connections...");
-	while let Either::Left((Some(stream), next_close_future)) =
-		future::select(incoming.next(), close_future).await
-	{
-		close_future = next_close_future;
-		logger::info("Socket connected");
-		task::spawn(handle_unix_socket_client(stream));
+	log::trace!("Listening for socket connections...");
+	loop {
+		let accept_future = socket_server.accept();
+		tokio::pin!(accept_future);
+		let select_result: _ =
+			future::select(accept_future, close_future).await;
+		match select_result {
+			Either::Left((stream, next_close_future)) => {
+				close_future = next_close_future;
+				log::info!("Socket connected");
+				task::spawn(handle_unix_socket_client(stream));
+			}
+			_ => break,
+		}
 	}
 
-	drop(module);
+	// drop(module);
 
-	logger::verbose("Socket server is closed.");
+	log::trace!("Socket server is closed.");
 
 	Ok(())
 }
@@ -78,24 +79,32 @@ pub async fn on_exit() {
 	}
 }
 
-async fn handle_unix_socket_client(stream: Result<UnixStream>) {
+async fn handle_unix_socket_client(stream: Result<(UnixStream, SocketAddr)>) {
 	if stream.is_err() {
-		logger::error("Error occured while opening socket");
+		log::error!("Error occured while opening socket");
 		return;
 	}
 
-	let stream = stream.unwrap();
-	let (sender, mut receiver) = unbounded::<String>();
-	logger::verbose("New MPSC channel created");
+	let (stream, _) = stream.unwrap();
+	let (write_sender, mut write_receiver) = unbounded::<String>();
+	log::trace!("New MPSC channel created");
 
 	let uuid = data_handler::new_connection_id().await;
-	logger::info(&format!("New connection assigned ID {}", uuid));
-	let module_comm = ModuleComm::new_unix_comm(uuid, stream, sender);
+	let (socket_reader, mut socket_writer) = stream.into_split();
 
-	logger::verbose(&format!("Polling connection ID {}", uuid));
-	let read_future = module_comm.read_data_loop();
-	let write_future = module_comm.write_data_loop(&mut receiver);
+	log::info!("New connection assigned ID {}", uuid);
+	let module_comm = ModuleComm::new(uuid, write_sender);
 
-	future::join(read_future, write_future).await;
-	logger::info(&format!("Connection with ID {} disconnected", uuid));
+	log::trace!("Polling connection ID {}", uuid);
+	let task = task::spawn(async move {
+		while let Some(data) = write_receiver.next().await {
+			if let Err(err) = socket_writer.write_all(data.as_bytes()).await {
+				log::error!("Error while writing to socket: {}", err);
+			}
+		}
+	});
+	let read_future = module_comm.read_data_loop(socket_reader);
+
+	let _ = future::join(read_future, task).await;
+	log::info!("Connection with ID {} disconnected", uuid);
 }

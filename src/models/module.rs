@@ -1,15 +1,15 @@
-use crate::utils::logger;
-
 use std::collections::HashMap;
 
-use async_std::sync::RwLock;
 use futures::channel::mpsc::UnboundedSender;
 use futures_util::sink::SinkExt;
+use lazy_static::lazy_static;
+use tokio::sync::RwLock;
 
 use semver::{Version, VersionReq};
 
 lazy_static! {
-	pub(crate) static ref JUNO_MODULE: RwLock<Option<Module>> = RwLock::new(None);
+	pub(crate) static ref JUNO_MODULE: RwLock<Option<Module>> =
+		RwLock::new(None);
 }
 
 #[derive(Clone)]
@@ -81,7 +81,10 @@ impl Module {
 	}
 
 	// Exposing dependencies
-	pub fn set_dependencies(&mut self, dependencies: HashMap<String, VersionReq>) {
+	pub fn set_dependencies(
+		&mut self,
+		dependencies: HashMap<String, VersionReq>,
+	) {
 		self.dependencies = dependencies;
 	}
 	pub fn get_dependencies(&self) -> &HashMap<String, VersionReq> {
@@ -112,7 +115,7 @@ impl Module {
 
 		let result = sender.send(data).await;
 		if let Err(error) = result {
-			logger::error(&format!("Error queing data to module: {}", error));
+			log::error!("Error queing data to module: {}", error);
 		}
 	}
 
@@ -121,7 +124,7 @@ impl Module {
 
 		let result = sender.close().await;
 		if let Err(error) = result {
-			logger::error(&format!("Error closing module's sending queue: {}", error));
+			log::error!("Error closing module's sending queue: {}", error);
 			return;
 		}
 	}

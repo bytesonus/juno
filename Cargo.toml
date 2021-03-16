@@ -8,19 +8,20 @@ description = "Minimalistic, unpoinionated micro-services framework"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = "*"
-lazy_static = "*"
-serde_json = "*"
-futures = "*"
-futures-util = "*"
-rand = "*"
-ctrlc = "*"
-semver = "*"
-colored = "*"
-fslock = "*"
-async-std = { version = "*", features = ["attributes"] }
-juno = "0.1.4-beta"
-async-trait = "*"
+clap = "2.33.3"
+lazy_static = "1.4.0"
+serde_json = "1.0.64"
+futures = "0.3.13"
+futures-util = "0.3.13"
+rand = "0.8.3"
+semver = "0.11.0"
+colored = "2.0.0"
+fslock = "0.1.6"
+juno = "0.1.2"
+async-trait = "0.1.48"
+tokio = {version = "1", features = ["full"]}
+simple_logger = "1.11.0"
+log = "0.4.14"
 
 [profile.release]
 lto = true
